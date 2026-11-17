@@ -1,0 +1,18 @@
+# Entornos virtuales y caché Python
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+
+# Bases de datos generadas, CSVs pesados (>100MB) y estado local
+data/raw/*.csv
+data/duckdb/*.duckdb
+data/duckdb/*.duckdb.wal
+data/chromadb/
+data/state/*.db
+
+# Salidas temporales
+outputs/tmp/
+.env
