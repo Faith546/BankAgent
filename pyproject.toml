@@ -1,0 +1,45 @@
+[project]
+name = "banamex-portfolio-agent"
+version = "0.1.0"
+description = "Asistente Agéntico Local de Análisis de Portafolio de Tarjetas de Crédito - Banamex (MVP)"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    # Base de Datos y Datos
+    "duckdb>=1.1.0",
+    "pandas>=2.2.0",
+    "pyarrow>=17.0.0",
+    "openpyxl>=3.1.5",
+    # LLM y Orquestación
+    "ollama>=0.4.0",
+    "langchain-core>=0.3.0",
+    "langchain-ollama>=0.2.0",
+    "langgraph>=0.2.0",
+    "langgraph-checkpoint-sqlite>=2.0.0",
+    "pydantic>=2.9.0",
+    # Memoria Vectorial (RAG)
+    "chromadb>=0.5.0",
+    "langchain-community>=0.3.0",
+    # Visualización
+    "plotly>=5.24.0",
+    "kaleido>=0.2.1",
+    "matplotlib>=3.9.0",
+    "seaborn>=0.13.2",
+    # Generación de Reportes
+    "python-docx>=1.1.2",
+    "python-pptx>=1.0.2",
+    "jinja2>=3.1.4",
+    # Interfaz Web
+    "streamlit>=1.40.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.0",
+    "ruff>=0.7.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
