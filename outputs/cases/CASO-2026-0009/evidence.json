@@ -1,0 +1,32 @@
+[
+  {
+    "resumen_cubo": {
+      "filtros": {
+        "channel": "Branch",
+        "age_tag": "03| Mature >30",
+        "score_tag": "<130",
+        "product": null,
+        "vintage": null
+      },
+      "cohortes_unicas": 59,
+      "cuentas_iniciales_mob0": 878,
+      "lineas_credito_iniciales_mob0": 39208003,
+      "filas_cubo": 1135,
+      "min_mob": 0,
+      "max_mob": 31,
+      "saldo_promedio_enr": 161514.75,
+      "saldo_acumulado_enr": 183319245.05,
+      "ingresos_acumulados": 11674416.19,
+      "perdida_bruta_gcl": 97887854.69,
+      "recuperacion_cobranza": 32520973.96,
+      "perdida_neta_ncl": 65366880.73,
+      "gastos_totales": 785605.2,
+      "utilidad_neta": -54478069.74,
+      "over30_rate_pct": 46.84,
+      "ncl_rate_pct": 35.66,
+      "recovery_rate_pct": 33.22,
+      "yield_rate_pct": 6.37,
+      "net_roa_pct": -29.72
+    }
+  }
+]
