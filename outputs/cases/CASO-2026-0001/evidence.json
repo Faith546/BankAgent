@@ -1,0 +1,32 @@
+[
+  {
+    "resumen_cubo": {
+      "filtros": {
+        "channel": "TMK",
+        "age_tag": "02| Young 25-30",
+        "score_tag": "<130",
+        "product": null,
+        "vintage": null
+      },
+      "cohortes_unicas": 34,
+      "cuentas_iniciales_mob0": 457,
+      "lineas_credito_iniciales_mob0": 20248522,
+      "filas_cubo": 676,
+      "min_mob": 0,
+      "max_mob": 32,
+      "saldo_promedio_enr": 134609.41,
+      "saldo_acumulado_enr": 90995961.86,
+      "ingresos_acumulados": 7171972.11,
+      "perdida_bruta_gcl": 57785385.1,
+      "recuperacion_cobranza": 18654921.18,
+      "perdida_neta_ncl": 39130463.92,
+      "gastos_totales": 570597.98,
+      "utilidad_neta": -32529089.79,
+      "over30_rate_pct": 47.46,
+      "ncl_rate_pct": 43.0,
+      "recovery_rate_pct": 32.28,
+      "yield_rate_pct": 7.88,
+      "net_roa_pct": -35.75
+    }
+  }
+]
