@@ -13,6 +13,13 @@ data/duckdb/*.duckdb.wal
 data/chromadb/
 data/state/*.db
 
-# Salidas temporales
+# Salidas temporales y secretos locales
 outputs/tmp/
 .env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+data/*.csv
