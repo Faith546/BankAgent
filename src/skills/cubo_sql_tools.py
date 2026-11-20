@@ -10,48 +10,99 @@ import duckdb
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
-from src.config import DUCKDB_PATH
+from src.config import (
+    DUCKDB_PATH,
+    VALID_AGE_TAGS,
+    VALID_CHANNELS,
+    VALID_PRODUCTS,
+    VALID_SCORE_TAGS,
+    VINTAGE_MAX,
+    VINTAGE_MIN,
+)
 
 _FORBIDDEN_SQL_PATTERN = re.compile(
-    r"\b(DROP|DELETE|UPDATE|INSERT|ALTER|CREATE|COPY|ATTACH|DETACH|PRAGMA|CALL|EXPORT|IMPORT|REPLACE|TRUNCATE|MERGE)\b",
+    r"\b(DROP|DELETE|UPDATE|INSERT|ALTER|CREATE|COPY|ATTACH|DETACH|"
+    r"PRAGMA|CALL|EXPORT|IMPORT|REPLACE|TRUNCATE|MERGE)\b",
     re.IGNORECASE,
 )
 
 
 class FiltroCuboInput(BaseModel):
-    """Filtros opcionales para consultar cohortes del cubo Banamex."""
+    """Optional exact filters for querying Banamex credit card cohorts."""
 
     channel: Optional[str] = Field(
         default=None,
-        description="Canal de colocación exacto (ej. 'Aeropuerto', 'Branch', 'F2F', 'Internet').",
+        description="Exact channel (e.g. 'Aeropuerto', 'Branch', 'F2F', 'Internet', 'TMK').",
     )
     age_tag: Optional[str] = Field(
         default=None,
-        description="Rango de edad exacto (ej. '01| Young < 25', '02| Young 25-30', '03| Mature >30').",
+        description="Exact age bracket ('01| Young < 25', '02| Young 25-30', '03| Mature >30').",
     )
     score_tag: Optional[str] = Field(
         default=None,
-        description="Rango de score exacto (ej. '130-140', '141-150', 'a.<=154').",
+        description="Exact score bracket (e.g. '<130', '130-140', '141-150', 'a.<=154').",
     )
     product: Optional[str] = Field(
         default=None,
-        description="Producto exacto sin acentos (ej. 'Clasica', 'Oro', 'Platinum', 'Teleton').",
+        description="Exact product without accents (e.g. 'Clasica', 'Oro', 'Platinum', 'Teleton').",
     )
     vintage: Optional[int] = Field(
         default=None,
-        description="Mes de apertura en formato AAAAMM (ej. 202401).",
+        description="Booking month in YYYYMM integer format (202401 to 202609).",
     )
 
 
 class SqlSelectInput(BaseModel):
-    """Esquema para consultas SQL de solo lectura generadas por el agente."""
+    """Schema for read-only DuckDB SELECT queries written by the agent."""
 
     query_sql: str = Field(
-        description="Consulta SELECT o WITH en dialecto DuckDB sobre la vista `v_cubo_metricas`."
+        description="Read-only DuckDB SELECT or WITH query targeting view `v_cubo_metricas`."
     )
     proposito: str = Field(
-        description="Breve explicación de qué métrica o pregunta responde esta consulta."
+        description="Short explanation of what business metric or question this query answers."
     )
+
+
+def validate_cube_filters(
+    channel: Optional[str] = None,
+    age_tag: Optional[str] = None,
+    score_tag: Optional[str] = None,
+    product: Optional[str] = None,
+    vintage: Optional[int] = None,
+) -> dict[str, Any] | None:
+    """Validate filter values before querying DuckDB; return structured error with options."""
+    checks = [
+        ("channel", channel, VALID_CHANNELS),
+        ("age_tag", age_tag, VALID_AGE_TAGS),
+        ("score_tag", score_tag, VALID_SCORE_TAGS),
+        ("product", product, VALID_PRODUCTS),
+    ]
+    for name, val, allowed in checks:
+        if val is not None and str(val).strip() != "":
+            clean = str(val).strip()
+            if clean not in allowed:
+                return {
+                    "error": (
+                        f"Invalid {name} value '{clean}'. Use an exact value from `disponibles`."
+                    ),
+                    "parametro": name,
+                    "valor_recibido": clean,
+                    "disponibles": list(allowed),
+                }
+
+    if vintage is not None:
+        if not isinstance(vintage, int) or vintage < VINTAGE_MIN or vintage > VINTAGE_MAX:
+            return {
+                "error": (
+                    f"Invalid vintage '{vintage}'. "
+                    f"Must be an integer between {VINTAGE_MIN} and {VINTAGE_MAX}."
+                ),
+                "parametro": "vintage",
+                "valor_recibido": vintage,
+                "rango_valido": [VINTAGE_MIN, VINTAGE_MAX],
+            }
+
+    return None
 
 
 def _build_where_clause(
@@ -61,7 +112,7 @@ def _build_where_clause(
     product: Optional[str] = None,
     vintage: Optional[int] = None,
 ) -> tuple[str, list[Any]]:
-    """Construye cláusula WHERE parametrizada y lista de argumentos."""
+    """Builds parameterized WHERE clause and argument list."""
     clauses: list[str] = []
     params: list[Any] = []
     filters = [
@@ -81,33 +132,30 @@ def _build_where_clause(
 
 
 def _round_row(row: dict[str, Any]) -> dict[str, Any]:
-    """Redondea floats a 2 decimales para legibilidad y consistencia JSON."""
-    return {
-        k: round(v, 2) if isinstance(v, float) else v
-        for k, v in row.items()
-    }
+    """Rounds floats to 2 decimal places for JSON consistency."""
+    return {k: round(v, 2) if isinstance(v, float) else v for k, v in row.items()}
 
 
 def validate_readonly_sql(query_sql: str) -> str:
-    """Valida que el SQL sea exclusivamente SELECT/WITH sin DDL/DML ni múltiples sentencias."""
+    """Validates that SQL is strictly read-only SELECT/WITH with no DDL/DML or multi-statements."""
     cleaned = query_sql.strip()
     if cleaned.endswith(";"):
         cleaned = cleaned[:-1].strip()
 
     if not cleaned:
-        raise ValueError("La consulta SQL está vacía.")
+        raise ValueError("SQL query is empty.")
     if ";" in cleaned:
-        raise ValueError("No se permiten múltiples sentencias SQL separadas por ';'.")
+        raise ValueError("Multiple SQL statements separated by ';' are not allowed.")
 
     upper_start = cleaned.lstrip().upper()
     if not (upper_start.startswith("SELECT") or upper_start.startswith("WITH")):
-        raise ValueError("Solo se permiten consultas de lectura que inicien con SELECT o WITH.")
+        raise ValueError("Only read-only queries starting with SELECT or WITH are allowed.")
 
     forbidden = _FORBIDDEN_SQL_PATTERN.search(cleaned)
     if forbidden:
         raise ValueError(
-            f"Palabra clave prohibida detectada en SQL: '{forbidden.group(1)}'. "
-            "Solo se permiten consultas SELECT de lectura."
+            f"Forbidden SQL keyword detected: '{forbidden.group(1)}'. "
+            "Only read-only SELECT queries are permitted."
         )
 
     if not re.search(r"\bLIMIT\b", cleaned, re.IGNORECASE):
@@ -124,7 +172,11 @@ def obtener_resumen_portafolio(
     product: Optional[str] = None,
     vintage: Optional[int] = None,
 ) -> str:
-    """Calcula el resumen financiero y de riesgo agregado para el segmento filtrado en DuckDB."""
+    """Compute aggregated financial and risk KPIs (MOB 0 accounts, NCL%, Over30%, ROA%) from DuckDB."""
+    err = validate_cube_filters(channel, age_tag, score_tag, product, vintage)
+    if err is not None:
+        return json.dumps(err, ensure_ascii=False)
+
     where_sql, params = _build_where_clause(channel, age_tag, score_tag, product, vintage)
     mob0_where = f"{where_sql} AND MOB = 0" if where_sql else "WHERE MOB = 0"
 
@@ -160,7 +212,10 @@ def obtener_resumen_portafolio(
                 (SUM(NCLAMTS) / NULLIF(SUM(ENRAMTS), 0)) * 100.0 AS ncl_rate_pct,
                 (SUM(RECOVERYAMTS) / NULLIF(SUM(GCLAMTS), 0)) * 100.0 AS recovery_rate_pct,
                 (SUM(REVENUE) / NULLIF(SUM(ENRAMTS), 0)) * 100.0 AS yield_rate_pct,
-                ((SUM(REVENUE) - SUM(NCLAMTS) - SUM(EXPENSES_TOTAL)) / NULLIF(SUM(ENRAMTS), 0)) * 100.0 AS net_roa_pct
+                (
+                    (SUM(REVENUE) - SUM(NCLAMTS) - SUM(EXPENSES_TOTAL))
+                    / NULLIF(SUM(ENRAMTS), 0)
+                ) * 100.0 AS net_roa_pct
             FROM v_cubo_metricas
             {where_sql}
             """,
@@ -168,6 +223,21 @@ def obtener_resumen_portafolio(
         ).fetchone()
     finally:
         con.close()
+
+    if agg_row[0] == 0:
+        return json.dumps(
+            {
+                "aviso": "No rows matched the combined filters in the cube.",
+                "filtros": {
+                    "channel": channel,
+                    "age_tag": age_tag,
+                    "score_tag": score_tag,
+                    "product": product,
+                    "vintage": vintage,
+                },
+            },
+            ensure_ascii=False,
+        )
 
     result = _round_row(
         {
@@ -210,7 +280,11 @@ def obtener_curva_maduracion(
     product: Optional[str] = None,
     vintage: Optional[int] = None,
 ) -> str:
-    """Devuelve la serie temporal por MOB (0 a 32) con tasas ponderadas de morosidad, pérdida y ROA."""
+    """Return MOB (0..32) maturation series with weighted Over30%, NCL%, Yield%, and Net ROA%."""
+    err = validate_cube_filters(channel, age_tag, score_tag, product, vintage)
+    if err is not None:
+        return json.dumps(err, ensure_ascii=False)
+
     where_sql, params = _build_where_clause(channel, age_tag, score_tag, product, vintage)
 
     con = duckdb.connect(str(DUCKDB_PATH), read_only=True)
@@ -224,7 +298,10 @@ def obtener_curva_maduracion(
                 (SUM(OVER30AMTS) / NULLIF(SUM(ENRAMTS), 0)) * 100.0 AS over30_rate_pct,
                 (SUM(NCLAMTS) / NULLIF(SUM(ENRAMTS), 0)) * 100.0 AS ncl_rate_pct,
                 (SUM(REVENUE) / NULLIF(SUM(ENRAMTS), 0)) * 100.0 AS yield_rate_pct,
-                ((SUM(REVENUE) - SUM(NCLAMTS) - SUM(EXPENSES_TOTAL)) / NULLIF(SUM(ENRAMTS), 0)) * 100.0 AS net_roa_pct
+                (
+                    (SUM(REVENUE) - SUM(NCLAMTS) - SUM(EXPENSES_TOTAL))
+                    / NULLIF(SUM(ENRAMTS), 0)
+                ) * 100.0 AS net_roa_pct
             FROM v_cubo_metricas
             {where_sql}
             GROUP BY MOB
@@ -255,7 +332,7 @@ def obtener_curva_maduracion(
 
 @tool(args_schema=SqlSelectInput)
 def ejecutar_sql_select_seguro(query_sql: str, proposito: str) -> str:
-    """Ejecuta una consulta SQL SELECT de solo lectura sobre `v_cubo_metricas` en DuckDB."""
+    """Execute a read-only DuckDB SELECT/WITH query on `v_cubo_metricas` for ad-hoc analysis."""
     try:
         safe_sql = validate_readonly_sql(query_sql)
     except ValueError as exc:
@@ -280,7 +357,7 @@ def ejecutar_sql_select_seguro(query_sql: str, proposito: str) -> str:
             {
                 "error_duckdb": str(exc),
                 "sql_intentado": safe_sql,
-                "instruccion": "Corrige el nombre de columna o sintaxis SQL e inténtalo de nuevo.",
+                "instruccion": "Fix the column name or SQL syntax and retry once.",
             },
             ensure_ascii=False,
         )

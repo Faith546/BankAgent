@@ -31,7 +31,7 @@ class VizInput(BaseModel):
     tipo_grafica: ChartType = Field(description="Tipo de gráfica financiera a generar.")
     case_id: str = Field(
         default="CASO-2026-0001",
-        description="Identificador del caso para guardar los archivos en outputs/cases/{case_id}/charts/.",
+        description="Identificador del caso para guardar archivos en outputs/cases/{case_id}/.",
     )
     filtros: Optional[dict[str, Any]] = Field(
         default=None,
@@ -82,28 +82,50 @@ def build_plotly_figure(
 
             fig = go.Figure()
             fig.add_trace(
-                go.Scatter(x=mobs, y=over30, mode="lines+markers", name="% Over30 / ENR", line={"color": "#d97706", "width": 3})
+                go.Scatter(
+                    x=mobs,
+                    y=over30,
+                    mode="lines+markers",
+                    name="% Over30 / ENR",
+                    line={"color": "#D97706", "width": 3},
+                )
             )
             fig.add_trace(
-                go.Scatter(x=mobs, y=ncl, mode="lines+markers", name="% NCL / ENR", line={"color": "#dc2626", "width": 3})
+                go.Scatter(
+                    x=mobs,
+                    y=ncl,
+                    mode="lines+markers",
+                    name="% NCL / ENR",
+                    line={"color": "#C8102E", "width": 3},
+                )
             )
             fig.add_hline(
                 y=MAX_NCL_RATE_PCT,
                 line_dash="dash",
-                line_color="#dc2626",
+                line_color="#C8102E",
                 annotation_text=f"Límite NCL ({MAX_NCL_RATE_PCT}%)",
             )
             fig.add_hline(
                 y=MAX_OVER30_RATE_PCT,
                 line_dash="dot",
-                line_color="#d97706",
+                line_color="#D97706",
                 annotation_text=f"Límite Over30 ({MAX_OVER30_RATE_PCT}%)",
             )
             fig.update_layout(
                 title="Curva S de Maduración: Morosidad Over30 y Pérdida Neta (NCL)",
                 xaxis_title="MOB (Months on Book)",
                 yaxis_title="Tasa sobre Saldo (%)",
-                template="plotly_white",
+                hovermode="x unified",
+                margin={"l": 40, "r": 20, "t": 55, "b": 40},
+                legend={
+                    "orientation": "h",
+                    "yanchor": "bottom",
+                    "y": 1.02,
+                    "xanchor": "right",
+                    "x": 1,
+                },
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
             )
             return fig
 
@@ -113,7 +135,10 @@ def build_plotly_figure(
                 SELECT
                     SCORE_TAG,
                     MOB,
-                    ((SUM(REVENUE) - SUM(NCLAMTS) - SUM(EXPENSES_TOTAL)) / NULLIF(SUM(ENRAMTS), 0)) * 100.0 AS net_roa_pct
+                    (
+                        (SUM(REVENUE) - SUM(NCLAMTS) - SUM(EXPENSES_TOTAL))
+                        / NULLIF(SUM(ENRAMTS), 0)
+                    ) * 100.0 AS net_roa_pct
                 FROM v_cubo_metricas
                 {where_sql}
                 GROUP BY SCORE_TAG, MOB
@@ -130,7 +155,12 @@ def build_plotly_figure(
             fig = go.Figure()
             for score, (mobs, roas) in by_score.items():
                 fig.add_trace(go.Scatter(x=mobs, y=roas, mode="lines", name=score))
-            fig.add_hline(y=0.0, line_dash="dash", line_color="#374151", annotation_text="Punto de Equilibrio (0%)")
+            fig.add_hline(
+                y=0.0,
+                line_dash="dash",
+                line_color="#374151",
+                annotation_text="Punto de Equilibrio (0%)",
+            )
             fig.update_layout(
                 title="Curva J de Rentabilidad: ROA Neto por MOB y Score",
                 xaxis_title="MOB (Months on Book)",
@@ -159,8 +189,24 @@ def build_plotly_figure(
             fig = go.Figure(
                 go.Waterfall(
                     orientation="v",
-                    measure=["relative", "relative", "relative", "relative", "relative", "relative", "total"],
-                    x=["+Revenue", "-GCL (Bruta)", "+Recovery", "-Exp. Acq", "-Exp. Var", "-Exp. Fix", "Margen Neto"],
+                    measure=[
+                        "relative",
+                        "relative",
+                        "relative",
+                        "relative",
+                        "relative",
+                        "relative",
+                        "total",
+                    ],
+                    x=[
+                        "+Revenue",
+                        "-GCL (Bruta)",
+                        "+Recovery",
+                        "-Exp. Acq",
+                        "-Exp. Var",
+                        "-Exp. Fix",
+                        "Margen Neto",
+                    ],
                     y=[rev, -gcl, rec, -acq, -ecm_var, -ecm_fix, net_margin],
                     connector={"line": {"color": "rgb(63, 63, 63)"}},
                 )
@@ -240,10 +286,20 @@ def build_plotly_figure(
                     y=yield_vals,
                     mode="markers",
                     text=labels,
-                    marker={"size": sizes, "color": ncl_vals, "colorscale": "RdYlGn_r", "showscale": True},
+                    marker={
+                        "size": sizes,
+                        "color": ncl_vals,
+                        "colorscale": "RdYlGn_r",
+                        "showscale": True,
+                    },
                 )
             )
-            fig.add_vline(x=MAX_NCL_RATE_PCT, line_dash="dash", line_color="#dc2626", annotation_text="Límite NCL 15%")
+            fig.add_vline(
+                x=MAX_NCL_RATE_PCT,
+                line_dash="dash",
+                line_color="#dc2626",
+                annotation_text="Límite NCL 15%",
+            )
             fig.update_layout(
                 title="Matriz de Cuadrantes (Cohortes Maduras MOB >= 12)",
                 xaxis_title="Severidad NCL / ENR (%)",

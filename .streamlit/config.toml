@@ -1,0 +1,61 @@
+# Tema corporativo Banamex — Streamlit 1.67+ Native Theming
+# Documentación: https://docs.streamlit.io/develop/concepts/configuration
+
+[theme]
+base = "light"
+primaryColor = "#003B71"
+backgroundColor = "#F8FAFC"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#0F172A"
+borderColor = "#CBD5E1"
+showWidgetBorder = true
+showSidebarBorder = true
+font = "sans-serif"
+headingFont = "sans-serif"
+codeFont = "monospace"
+baseRadius = "0.5rem"
+buttonRadius = "0.5rem"
+metricValueFontSize = "1.65rem"
+metricValueFontWeight = 700
+dataframeHeaderBackgroundColor = "#EEF2F7"
+dataframeHeaderTextColor = "#0F172A"
+dataframeBorderColor = "#CBD5E1"
+redColor = "#C8102E"
+orangeColor = "#D97706"
+greenColor = "#0F766E"
+blueColor = "#003B71"
+chartCategoricalColors = ["#003B71", "#C8102E", "#0F766E", "#D97706", "#475569", "#2563EB"]
+
+[theme.sidebar]
+backgroundColor = "#002B54"
+secondaryBackgroundColor = "#0A3A66"
+textColor = "#F8FAFC"
+primaryColor = "#E11D48"
+borderColor = "#1E4E79"
+showWidgetBorder = true
+
+[theme.dark]
+primaryColor = "#3B82F6"
+backgroundColor = "#0B1120"
+secondaryBackgroundColor = "#111827"
+textColor = "#F8FAFC"
+borderColor = "#334155"
+showWidgetBorder = true
+showSidebarBorder = true
+dataframeHeaderBackgroundColor = "#1E293B"
+dataframeHeaderTextColor = "#F8FAFC"
+dataframeBorderColor = "#334155"
+redColor = "#F43F5E"
+orangeColor = "#F59E0B"
+greenColor = "#14B8A6"
+blueColor = "#3B82F6"
+
+[theme.dark.sidebar]
+backgroundColor = "#060D1A"
+secondaryBackgroundColor = "#0F172A"
+textColor = "#F8FAFC"
+primaryColor = "#F43F5E"
+borderColor = "#1E293B"
+
+[client]
+toolbarMode = "minimal"

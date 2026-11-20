@@ -8,8 +8,26 @@ from typing import Any
 
 # Números estructurales o de referencia de negocio que no requieren venir de una celda SQL
 _ALLOWED_CONTEXT_NUMBERS = {
-    0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 10.0, 12.0, 15.0, 18.0, 20.0, 25.0, 30.0, 32.0, 40.0, 100.0,
-    2024.0, 2025.0, 2026.0,
+    0.0,
+    1.0,
+    2.0,
+    3.0,
+    4.0,
+    5.0,
+    6.0,
+    10.0,
+    12.0,
+    15.0,
+    18.0,
+    20.0,
+    25.0,
+    30.0,
+    32.0,
+    40.0,
+    100.0,
+    2024.0,
+    2025.0,
+    2026.0,
 }
 
 _NUMBER_REGEX = re.compile(r"(?<![A-Za-z0-9_])(-?\d{1,3}(?:,\d{3})*(?:\.\d+)?|-?\d+(?:\.\d+)?)")

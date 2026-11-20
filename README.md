@@ -63,11 +63,15 @@ uv run python -m src.data.init_db
 uv run python -c "from src.skills.rag_tools import ingest_policies; print('Secciones indexadas:', ingest_policies())"
 ```
 
-### Paso 4: Verificar pruebas unitarias (opcional recomendado)
+### Paso 4: Verificar pruebas unitarias y Smoke Test / Benchmark
 ```powershell
 uv run pytest tests/test_db_reading.py tests/test_skills_and_guardrails.py -v
 ```
-*(Prueba de humo opcional contra Ollama: `uv run python -m tests.test_prompts_ollama`)*
+*(Con Ollama abierto, corre las 4 pruebas de efecto de tool-calling o el benchmark completo de 10 casos del Golden Dataset):*
+```powershell
+uv run python -m tests.smoke_test_agent
+uv run python -m tests.smoke_test_agent --benchmark
+```
 
 ### Paso 5: Abrir la Consola Híbrida en Streamlit
 Con **Ollama** corriendo en segundo plano:
@@ -95,6 +99,7 @@ BankAgent/
 │   └── politicas_internas/
 │       └── manual_apetito_riesgo.md    # Reglas de negocio para RAG
 ├── docs/
+│   ├── ARQUITECTURA_Y_LIBRERIAS.md     # Mapa de arquitectura, diagramas y librerías
 │   ├── MVP_CONTEXT_AGENT_BANAMEX.md    # Guía maestra de arquitectura
 │   └── TASKS.md                        # Tablero de tareas por etapas
 ├── src/

@@ -104,7 +104,10 @@ def consultar_politica_riesgo(consulta: str) -> str:
         return json.dumps(
             {
                 "error_rag": str(exc),
-                "aviso": "No se pudo consultar ChromaDB/Ollama embeddings; verifica que Ollama esté activo.",
+                "aviso": (
+                    "No se pudo consultar ChromaDB/Ollama embeddings; "
+                    "verifica que Ollama esté activo."
+                ),
             },
             ensure_ascii=False,
         )

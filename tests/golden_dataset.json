@@ -1,0 +1,102 @@
+[
+  {
+    "id": "GD-01",
+    "nivel": 1,
+    "pregunta": "¿Cuántas cuentas iniciales (MOB = 0) tiene todo el portafolio?",
+    "filtros": {},
+    "sql_verificacion": "SELECT SUM(ACCOUNTS) AS val FROM v_cubo_metricas WHERE MOB = 0",
+    "cifras_esperadas": [1249981],
+    "palabras_clave_esperadas": ["1,249,981", "1249981"],
+    "politica_aplicable": "N/A (consulta descriptiva de volumen MOB = 0)"
+  },
+  {
+    "id": "GD-02",
+    "nivel": 1,
+    "pregunta": "¿Cuál es la tasa de pérdida neta (NCL/ENR %) y cuántas cuentas iniciales (MOB = 0) tiene el canal Aeropuerto en producto Clásica?",
+    "filtros": {"channel": "Aeropuerto", "product": "Clasica"},
+    "sql_verificacion": "SELECT SUM(CASE WHEN MOB=0 THEN ACCOUNTS ELSE 0 END) AS accts, ROUND((SUM(NCLAMTS)/NULLIF(SUM(ENRAMTS),0))*100.0, 2) AS ncl_pct FROM v_cubo_metricas WHERE CHANNEL='Aeropuerto' AND PRODUCT='Clasica'",
+    "cifras_esperadas": [28152, 8.56],
+    "palabras_clave_esperadas": ["8.56", "28,152", "28152"],
+    "politica_aplicable": "Validación de filtro sin acento ('Clasica')"
+  },
+  {
+    "id": "GD-03",
+    "nivel": 1,
+    "pregunta": "¿Cuántas cuentas iniciales (MOB = 0) y qué monto total de líneas de crédito iniciales tiene el canal Branch?",
+    "filtros": {"channel": "Branch"},
+    "sql_verificacion": "SELECT SUM(ACCOUNTS) AS accts, SUM(CREDITLINESAMTS) AS lines FROM v_cubo_metricas WHERE CHANNEL='Branch' AND MOB = 0",
+    "cifras_esperadas": [173047, 8277146954],
+    "palabras_clave_esperadas": ["173,047", "173047"],
+    "politica_aplicable": "Trampa 1: filtrar MOB = 0"
+  },
+  {
+    "id": "GD-04",
+    "nivel": 1,
+    "pregunta": "¿Cuál es el ingreso acumulado (REVENUE) y la pérdida neta acumulada (NCLAMTS) del producto Oro?",
+    "filtros": {"product": "Oro"},
+    "sql_verificacion": "SELECT ROUND(SUM(REVENUE), 2) AS rev, ROUND(SUM(NCLAMTS), 2) AS ncl FROM v_cubo_metricas WHERE PRODUCT='Oro'",
+    "cifras_esperadas": [349559488.69, 901597582.3],
+    "palabras_clave_esperadas": ["349,559,488.69", "901,597,582.3"],
+    "politica_aplicable": "N/A (consulta descriptiva)"
+  },
+  {
+    "id": "GD-05",
+    "nivel": 2,
+    "pregunta": "Compara la tasa NCL/ENR (%) entre los canales Aeropuerto y Branch para cohortes maduras (MOB >= 6). ¿Cuál tiene mayor severidad?",
+    "filtros": {"channels": ["Aeropuerto", "Branch"], "mob_min": 6},
+    "sql_verificacion": "SELECT ROUND((SUM(NCLAMTS)/NULLIF(SUM(ENRAMTS),0))*100.0, 2) AS ncl_pct FROM v_cubo_metricas WHERE CHANNEL='Branch' AND MOB >= 6",
+    "cifras_esperadas": [9.53],
+    "palabras_clave_esperadas": ["Branch", "9.53", "8.89"],
+    "politica_aplicable": "Trampa 2: razón de sumas ponderada en MOB >= 6"
+  },
+  {
+    "id": "GD-06",
+    "nivel": 2,
+    "pregunta": "¿Qué canal tiene la peor tasa de pérdida neta (NCL/ENR %) en cohortes maduras (MOB >= 6)?",
+    "filtros": {"mob_min": 6},
+    "sql_verificacion": "SELECT ROUND((SUM(NCLAMTS)/NULLIF(SUM(ENRAMTS),0))*100.0, 2) AS ncl_pct FROM v_cubo_metricas WHERE CHANNEL='Costco' AND MOB >= 6",
+    "cifras_esperadas": [10.4],
+    "palabras_clave_esperadas": ["Costco", "10.4"],
+    "politica_aplicable": "Comparativa de canales en igualdad de madurez (MOB >= 6)"
+  },
+  {
+    "id": "GD-07",
+    "nivel": 2,
+    "pregunta": "Compara la eficiencia de recuperación (RECOVERYAMTS / GCLAMTS %) por rango de edad (AGE_TAG) en MOB >= 6. ¿Alguno está por debajo del límite de 40%?",
+    "filtros": {"mob_min": 6},
+    "sql_verificacion": "SELECT ROUND((SUM(RECOVERYAMTS)/NULLIF(SUM(GCLAMTS),0))*100.0, 2) AS rec_pct FROM v_cubo_metricas WHERE AGE_TAG='01| Young < 25' AND MOB >= 6",
+    "cifras_esperadas": [56.01],
+    "palabras_clave_esperadas": ["56.01", "55.14", "54.86"],
+    "politica_aplicable": "Sección 3: Eficiencia de cobranza mínima 40.0%"
+  },
+  {
+    "id": "GD-08",
+    "nivel": 3,
+    "pregunta": "Evalúa el segmento CHANNEL='TMK', AGE_TAG='02| Young 25-30', SCORE_TAG='<130' contra el manual de apetito de riesgo y emite un dictamen.",
+    "filtros": {"channel": "TMK", "age_tag": "02| Young 25-30", "score_tag": "<130"},
+    "sql_verificacion": "SELECT ROUND((SUM(NCLAMTS)/NULLIF(SUM(ENRAMTS),0))*100.0, 2) AS ncl_pct, ROUND((SUM(OVER30AMTS)/NULLIF(SUM(ENRAMTS),0))*100.0, 2) AS over30_pct FROM v_cubo_metricas WHERE CHANNEL='TMK' AND AGE_TAG='02| Young 25-30' AND SCORE_TAG='<130'",
+    "cifras_esperadas": [43.0, 47.46],
+    "palabras_clave_esperadas": ["Suspender", "43", "47.46"],
+    "politica_aplicable": "Sección 1 y 2: NCL > 15% y Over30 > 25% -> Suspender Originación"
+  },
+  {
+    "id": "GD-09",
+    "nivel": 3,
+    "pregunta": "¿Cuál es el producto con mejor ROA Neto (%) en cohortes maduras (MOB >= 12)? ¿Cumple el criterio de Cuadrante Expandir?",
+    "filtros": {"mob_min": 12},
+    "sql_verificacion": "SELECT ROUND(((SUM(REVENUE)-SUM(NCLAMTS)-SUM(EXPENSES_TOTAL))/NULLIF(SUM(ENRAMTS),0))*100.0, 2) AS roa_pct FROM v_cubo_metricas WHERE PRODUCT='Beyond' AND MOB >= 12",
+    "cifras_esperadas": [-5.57],
+    "palabras_clave_esperadas": ["Beyond", "-5.57"],
+    "politica_aplicable": "Sección 2: Cuadrante Expandir requiere NET_ROA_PCT > 0.0%"
+  },
+  {
+    "id": "GD-10",
+    "nivel": 3,
+    "pregunta": "Evalúa el segmento CHANNEL='Branch', AGE_TAG='01| Young < 25', SCORE_TAG='<130' en MOB >= 6 contra la política de apetito de riesgo.",
+    "filtros": {"channel": "Branch", "age_tag": "01| Young < 25", "score_tag": "<130", "mob_min": 6},
+    "sql_verificacion": "SELECT ROUND((SUM(NCLAMTS)/NULLIF(SUM(ENRAMTS),0))*100.0, 2) AS ncl_pct, ROUND((SUM(OVER30AMTS)/NULLIF(SUM(ENRAMTS),0))*100.0, 2) AS over30_pct FROM v_cubo_metricas WHERE CHANNEL='Branch' AND AGE_TAG='01| Young < 25' AND SCORE_TAG='<130' AND MOB >= 6",
+    "cifras_esperadas": [43.72, 52.72],
+    "palabras_clave_esperadas": ["43.72", "52.72", "Suspender"],
+    "politica_aplicable": "Sección 1 y 2: Fuera de apetito de riesgo -> Suspender Originación"
+  }
+]

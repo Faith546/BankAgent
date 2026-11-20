@@ -27,7 +27,7 @@ def load_dictionary(xlsx_path: Path | None = None) -> list[dict[str, Any]]:
         return []
 
     variables: list[dict[str, Any]] = []
-    # La primera fila es el encabezado: (None, 'Variable', 'Descripción', 'Valor Mínimo', 'Valor Máximo')
+    # Encabezado esperado: (None, 'Variable', 'Descripción', 'Valor Mínimo', 'Valor Máximo')
     for row in rows[1:]:
         if not row or len(row) < 3:
             continue
@@ -64,4 +64,3 @@ def dictionary_to_markdown(xlsx_path: Path | None = None) -> str:
 
 if __name__ == "__main__":
     print(dictionary_to_markdown())
-

@@ -33,6 +33,23 @@ def resolve_raw_csv_path() -> Path:
     return full_csv
 
 
+def _parse_bool_env(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in ("1", "true", "yes", "si", "on")
+
+
+def _parse_optional_int(name: str) -> int | None:
+    raw = os.getenv(name)
+    return int(raw) if raw is not None and raw.strip() != "" else None
+
+
+def _parse_optional_float(name: str) -> float | None:
+    raw = os.getenv(name)
+    return float(raw) if raw is not None and raw.strip() != "" else None
+
+
 RAW_CSV_PATH: Path = resolve_raw_csv_path()
 DICTIONARY_XLSX_PATH: Path = DATA_RAW_DIR / "Base Cards para TEC - Diccionario de Variables.xlsx"
 DUCKDB_PATH: Path = DUCKDB_DIR / "cubo_banamex.duckdb"
@@ -42,8 +59,16 @@ CHECKPOINTS_DB_PATH: Path = STATE_DIR / "checkpoints.db"
 OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "qwen3.5:9b")
 OLLAMA_EMBED_MODEL: str = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
-OLLAMA_TEMPERATURE: float = 0.1
+# temperature=0.0 mejora reproducibilidad en tool-calling y análisis numérico
+OLLAMA_TEMPERATURE: float = float(os.getenv("OLLAMA_TEMPERATURE", "0.0"))
+# reasoning=False (think: False en Ollama) evita que qwen3.5:9b gaste miles de tokens pensando
+OLLAMA_REASONING: bool = _parse_bool_env("OLLAMA_REASONING", False)
 OLLAMA_NUM_CTX: int = int(os.getenv("OLLAMA_NUM_CTX", "8192"))
+OLLAMA_TOP_K: int | None = _parse_optional_int("OLLAMA_TOP_K")
+OLLAMA_TOP_P: float | None = _parse_optional_float("OLLAMA_TOP_P")
+
+# Límites de ejecución del bucle agéntico (Guardrail de tope de vueltas)
+AGENT_MAX_TURNS: int = int(os.getenv("AGENT_MAX_TURNS", "8"))
 
 # Umbrales de apetito de riesgo (reglas de negocio base)
 MAX_NCL_RATE_PCT: float = 15.0
@@ -60,3 +85,70 @@ TEXT_COLUMNS: tuple[str, ...] = (
     "SCORE_TAG",
 )
 
+# Catálogo exacto de valores válidos del cubo (contratos de validación para tools)
+VALID_PRODUCTS: tuple[str, ...] = (
+    "Affinity",
+    "Beyond",
+    "Clasica",
+    "Conquista",
+    "Costco",
+    "Descubre",
+    "Explora",
+    "Home Depot",
+    "Joy",
+    "Oro",
+    "Platinum",
+    "Teleton",
+)
+
+VALID_CHANNELS: tuple[str, ...] = (
+    "Aeropuerto",
+    "Affinity",
+    "Beyond/Prestige",
+    "Branch",
+    "Costco",
+    "F2F",
+    "Home Depot",
+    "Internet",
+    "One Click",
+    "Others",
+    "TMK",
+    "Turismo",
+)
+
+VALID_AGE_TAGS: tuple[str, ...] = (
+    "01| Young < 25",
+    "02| Young 25-30",
+    "03| Mature >30",
+)
+
+VALID_STRATEGIES: tuple[str, ...] = (
+    "14.Recalibration 1.0",
+    "15.Recalibration 2.0",
+    "DARIA 1.6",
+    "DARIA 2.0",
+    "r.Reca champ",
+)
+
+VALID_SCORE_TAGS: tuple[str, ...] = (
+    "<130",
+    "130-140",
+    "141-150",
+    "151-160",
+    "161-170",
+    "171-180",
+    "181-190",
+    "190+",
+    "a.<=154",
+    "b.155-159",
+    "c.160-164",
+    "d.165-169",
+    "e.170-174",
+    "f.175-189",
+    "g.190-199",
+    "h.200-204",
+    "i.205+",
+)
+
+VINTAGE_MIN: int = 202401
+VINTAGE_MAX: int = 202609

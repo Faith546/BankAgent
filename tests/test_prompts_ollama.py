@@ -14,31 +14,38 @@ from src.config import (
     OLLAMA_BASE_URL,
     OLLAMA_MODEL,
     OLLAMA_NUM_CTX,
+    OLLAMA_REASONING,
     OLLAMA_TEMPERATURE,
 )
 
-SCHEMA_SYSTEM_PROMPT = """Eres un analista cuantitativo de riesgo de portafolio de tarjetas de crédito en Banamex.
+SCHEMA_SYSTEM_PROMPT = """Eres un analista de riesgo de portafolio de tarjetas en Banamex.
 Tu única fuente de datos es una base DuckDB con la vista `v_cubo_metricas`.
 
 Columnas clave de `v_cubo_metricas`:
-- Dimensiones: `COHORT_ID`, `VINTAGE` (AAAAMM), `STRATEGY`, `STRATEGY_SEGMENT`, `PRODUCT`, `CHANNEL`, `AGE_TAG`, `SCORE_TAG`, `MOB` (0 a 32).
-- Métricas aditivas: `ACCOUNTS`, `CREDITLINESAMTS`, `ENRACCTS`, `OVER30ACCTS`, `OVER30AMTS`, `GCLAMTS`, `NCLAMTS`, `RECOVERYAMTS`, `ENRAMTS`, `REVENUE`, `EXPENSES_ACQ`, `EXPENSES_ECM_VAR`, `EXPENSES_ECM_FIX`, `EXPENSES_TOTAL`.
+- Dimensiones: `COHORT_ID`, `VINTAGE` (AAAAMM), `STRATEGY`, `STRATEGY_SEGMENT`,
+  `PRODUCT`, `CHANNEL`, `AGE_TAG`, `SCORE_TAG`, `MOB` (0 a 32).
+- Métricas aditivas: `ACCOUNTS`, `CREDITLINESAMTS`, `ENRACCTS`, `OVER30ACCTS`,
+  `OVER30AMTS`, `GCLAMTS`, `NCLAMTS`, `RECOVERYAMTS`, `ENRAMTS`, `REVENUE`,
+  `EXPENSES_ACQ`, `EXPENSES_ECM_VAR`, `EXPENSES_ECM_FIX`, `EXPENSES_TOTAL`.
 
 REGLAS SQL OBLIGATORIAS (CERO EXCEPCIONES):
-1. El cubo es agregado por cohorte y MOB. NUNCA sumes `ACCOUNTS` ni `CREDITLINESAMTS` a lo largo de todos los MOB; para volumen inicial filtra `WHERE MOB = 0`.
+1. El cubo es agregado por cohorte y MOB. NUNCA sumes `ACCOUNTS` ni `CREDITLINESAMTS`
+   a lo largo de todos los MOB; para volumen inicial filtra `WHERE MOB = 0`.
 2. Para tasas agregadas NUNCA uses `AVG(ratio)`. Usa razón de sumas:
    - Tasa de pérdida neta (%): `(SUM(NCLAMTS) / NULLIF(SUM(ENRAMTS), 0)) * 100.0`
    - Tasa Over30 (%): `(SUM(OVER30AMTS) / NULLIF(SUM(ENRAMTS), 0)) * 100.0`
    - Utilidad neta: `SUM(REVENUE) - SUM(NCLAMTS) - SUM(EXPENSES_TOTAL)`
 3. Responde únicamente con:
    - Una breve explicación (máximo 2 líneas).
-   - Un bloque ```sql ... ``` con una consulta SELECT válida en dialecto DuckDB sobre `v_cubo_metricas` (con `LIMIT 20`).
+   - Un bloque ```sql ... ``` con un SELECT válido en DuckDB sobre `v_cubo_metricas`
+     (con `LIMIT 20`).
 """
 
 PROMPTS_DE_PRUEBA = [
     (
         "Nivel 1 (Descriptivo)",
-        "¿Cuántas cuentas iniciales (MOB = 0) y qué monto de líneas de crédito iniciales hay por CHANNEL?",
+        "¿Cuántas cuentas iniciales (MOB = 0) y qué monto de líneas de crédito "
+        "iniciales hay por CHANNEL?",
     ),
     (
         "Nivel 2 (Causa Raíz)",
@@ -66,6 +73,7 @@ def run_smoke_test() -> None:
         base_url=OLLAMA_BASE_URL,
         model=OLLAMA_MODEL,
         temperature=OLLAMA_TEMPERATURE,
+        reasoning=OLLAMA_REASONING,
         num_ctx=OLLAMA_NUM_CTX,
     )
 
@@ -112,4 +120,3 @@ def run_smoke_test() -> None:
 
 if __name__ == "__main__":
     run_smoke_test()
-

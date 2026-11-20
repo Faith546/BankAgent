@@ -73,4 +73,3 @@ def test_dictionary_loader_has_22_variables() -> None:
     names = {v["variable"] for v in variables}
     assert {"VINTAGE", "MOB", "COHORT_ID"} - {"COHORT_ID"} <= names
     assert {"NCLAMTS", "GCLAMTS", "RECOVERYAMTS", "ENRAMTS", "REVENUE"} <= names
-

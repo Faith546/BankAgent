@@ -11,7 +11,7 @@ from src.config import DUCKDB_DIR, DUCKDB_PATH, RAW_CSV_PATH
 
 
 def init_db(csv_path: Path | None = None, db_path: Path | None = None) -> dict[str, Any]:
-    """Crea o reconstruye la base DuckDB a partir del CSV crudo y devuelve métricas de auditoría."""
+    """Crea o reconstruye la base DuckDB desde el CSV crudo y devuelve métricas de auditoría."""
     src_csv = csv_path or RAW_CSV_PATH
     target_db = db_path or DUCKDB_PATH
 
@@ -143,4 +143,3 @@ def print_audit_table(audit: dict[str, Any]) -> None:
 if __name__ == "__main__":
     summary = init_db()
     print_audit_table(summary)
-
