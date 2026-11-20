@@ -44,7 +44,7 @@ class FiltroCuboInput(BaseModel):
     )
     product: Optional[str] = Field(
         default=None,
-        description="Exact product without accents (e.g. 'Clasica', 'Oro', 'Platinum', 'Teleton').",
+        description="Exact product without accents (e.g. 'Clasica', 'Oro', 'Platinum').",
     )
     vintage: Optional[int] = Field(
         default=None,
@@ -172,7 +172,7 @@ def obtener_resumen_portafolio(
     product: Optional[str] = None,
     vintage: Optional[int] = None,
 ) -> str:
-    """Compute aggregated financial and risk KPIs (MOB 0 accounts, NCL%, Over30%, ROA%) from DuckDB."""
+    """Compute aggregated KPIs (MOB 0 accounts, NCL%, Over30%, net profit, ROA%) from DuckDB."""
     err = validate_cube_filters(channel, age_tag, score_tag, product, vintage)
     if err is not None:
         return json.dumps(err, ensure_ascii=False)
