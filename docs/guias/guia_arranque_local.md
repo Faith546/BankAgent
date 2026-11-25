@@ -1,6 +1,6 @@
 # Guía de arranque (Adaptada a Ejecución 100% Local)
 
-Esta es la adaptación de [`Guía de arranque: antes de escribir código.md`](Gu%C3%ADa%20de%20arranque_%20antes%20de%20escribir%20c%C3%B3digo.md) para trabajar **en un solo equipo local** (Windows 11 + **NVIDIA RTX 4070 Laptop 8 GB VRAM** + **16 GB RAM**), sin depender de la estación universitaria por SSH ni de APIs externas.
+Esta es la adaptación de [`guia_arranque_original_ssh.md`](guia_arranque_original_ssh.md) para trabajar **en un solo equipo local** (Windows 11 + **NVIDIA RTX 4070 Laptop 8 GB VRAM** + **16 GB RAM**), sin depender de la estación universitaria por SSH ni de APIs externas.
 
 ---
 
