@@ -181,3 +181,17 @@ def test_reporte_generar_validators() -> None:
         secciones=[generar.Seccion(titulo="Detalle", parrafos=["Subió siete por ciento."])],
     )
     assert generar.con_letra(rep_letras) is True
+
+
+def test_reporte_unification_uses_ssot_palette_and_facade() -> None:
+    """Verifica que generar.py use la paleta oficial Banamex y report_tools exponga la fachada."""
+    from src.config import BANAMEX_PALETTE, TEMPLATES_DIR
+    from src.skills import report_tools
+
+    assert generar.colores[0] == BANAMEX_PALETTE["navy"]
+    assert generar.colores[1] == BANAMEX_PALETTE["crimson"]
+    assert generar.plantillas[0] == TEMPLATES_DIR / "memo_template.docx"
+    assert callable(report_tools.generar_reporte_chat)
+    assert callable(report_tools.editar_reporte_chat)
+    assert callable(report_tools.grafica_chat)
+    assert callable(report_tools.build_pptx_deck)

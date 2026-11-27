@@ -60,9 +60,12 @@ from src.skills.interpretacion.analisis import (  # noqa: E402
 from src.skills.interpretacion.dominio import aviso_fuera, es_del_dominio  # noqa: E402
 from src.skills.recuerdame import aprendizaje  # noqa: E402
 from src.skills.recuerdame import chats as memoria  # noqa: E402
-from src.skills.report_tools import compilar_entregables_ejecutivos  # noqa: E402
-from src.skills.reporte.generar import editar_reporte, grafica_chat  # noqa: E402
-from src.skills.reporte.generar import generar as generar_reporte  # noqa: E402
+from src.skills.report_tools import (  # noqa: E402
+    compilar_entregables_ejecutivos,
+    grafica_chat,
+)
+from src.skills.report_tools import editar_reporte_chat as editar_reporte  # noqa: E402
+from src.skills.report_tools import generar_reporte_chat as generar_reporte  # noqa: E402
 from src.skills.viz_tools import (  # noqa: E402
     ChartType,
     build_plotly_figure,
@@ -1120,8 +1123,11 @@ def main() -> None:
 
                 last_out = st.session_state.get("last_outputs", {})
                 if last_out.get("ruta_docx") and Path(last_out["ruta_docx"]).exists():
-                    d1, d2 = st.columns(2)
-                    with d1:
+                    has_pdf = (
+                        bool(last_out.get("ruta_pdf")) and Path(last_out["ruta_pdf"]).exists()
+                    )
+                    cols_dl = st.columns(3 if has_pdf else 2)
+                    with cols_dl[0]:
                         st.download_button(
                             "Descargar Memorándum (.docx)",
                             data=Path(last_out["ruta_docx"]).read_bytes(),
@@ -1129,7 +1135,7 @@ def main() -> None:
                             icon=":material/download:",
                             use_container_width=True,
                         )
-                    with d2:
+                    with cols_dl[1]:
                         st.download_button(
                             "Descargar Presentación (.pptx)",
                             data=Path(last_out["ruta_pptx"]).read_bytes(),
@@ -1137,6 +1143,15 @@ def main() -> None:
                             icon=":material/download:",
                             use_container_width=True,
                         )
+                    if has_pdf:
+                        with cols_dl[2]:
+                            st.download_button(
+                                "Descargar PDF (.pdf)",
+                                data=Path(last_out["ruta_pdf"]).read_bytes(),
+                                file_name=Path(last_out["ruta_pdf"]).name,
+                                icon=":material/picture_as_pdf:",
+                                use_container_width=True,
+                            )
 
         with tab_audit:
             with st.container(border=True):
@@ -1255,7 +1270,8 @@ def main() -> None:
                                 "No hay vista previa para este reporte, "
                                 "pero puedes descargar el Word."
                             )
-                        d1, d2 = st.columns(2)
+                        ruta_pptx = ruta_docx.with_suffix(".pptx")
+                        d1, d2, d3 = st.columns(3)
                         with d1:
                             if ruta_docx.exists():
                                 # si lo descarga es recompensa para el agente
@@ -1278,6 +1294,18 @@ def main() -> None:
                                     icon=":material/picture_as_pdf:",
                                     use_container_width=True,
                                     key=f"res_pdf_{chat_res['id']}_{k}",
+                                    on_click=aprendizaje.dar_recompensa,
+                                    args=(chat_res["id"], 1),
+                                )
+                        with d3:
+                            if ruta_pptx.exists():
+                                st.download_button(
+                                    "Descargar PPTX (16:9)",
+                                    data=ruta_pptx.read_bytes(),
+                                    file_name=ruta_pptx.name,
+                                    icon=":material/slideshow:",
+                                    use_container_width=True,
+                                    key=f"res_pptx_{chat_res['id']}_{k}",
                                     on_click=aprendizaje.dar_recompensa,
                                     args=(chat_res["id"], 1),
                                 )

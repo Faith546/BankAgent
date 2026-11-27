@@ -171,9 +171,11 @@ def test_viz_and_report_tools_generate_outputs() -> None:
         rep = json.loads(rep_str)
         assert rep["ruta_docx"].endswith(".docx")
         assert rep["ruta_pptx"].endswith(".pptx")
+        assert rep["ruta_pdf"] and rep["ruta_pdf"].endswith(".pdf")
         assert rep["slides_generadas"] == 5
         assert Path(rep["ruta_docx"]).exists()
         assert Path(rep["ruta_pptx"]).exists()
+        assert Path(rep["ruta_pdf"]).exists()
     finally:
         case_dir = CASES_DIR / test_case
         if case_dir.exists():

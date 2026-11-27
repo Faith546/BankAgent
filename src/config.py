@@ -165,3 +165,15 @@ OLLAMA_MODELOS: dict[str, str] = {
 
 # caracteres del historial del chat que le mandamos al modelo en cada pregunta
 HISTORIAL_CHARS: int = 4000
+
+# Paleta corporativa oficial Banamex (SSOT para UI, gráficas y reportes)
+BANAMEX_PALETTE: dict[str, str | tuple[str, ...]] = {
+    "navy": "#003B71",
+    "dark_navy": "#002447",
+    "crimson": "#C8102E",
+    "teal": "#0F766E",
+    "amber": "#D97706",
+    "slate": "#0F172A",
+    "muted": "#475569",
+    "chart_colors": ("#003B71", "#C8102E", "#0F766E", "#D97706", "#475569", "#2563EB"),
+}

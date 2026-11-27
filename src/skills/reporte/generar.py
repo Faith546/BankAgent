@@ -21,16 +21,18 @@ from langchain_ollama import ChatOllama
 from pydantic import BaseModel, Field
 
 from src.config import (
+    BANAMEX_PALETTE,
     DUCKDB_PATH,
     MAX_NCL_RATE_PCT,
     MAX_OVER30_RATE_PCT,
     OLLAMA_BASE_URL,
     OLLAMA_MODEL,
     OLLAMA_NUM_CTX,
+    TEMPLATES_DIR,
 )
 
 raiz = Path(__file__).resolve().parent
-plantillas = [raiz / "plantilla.docx"]
+plantillas = [TEMPLATES_DIR / "memo_template.docx", raiz / "plantilla.docx"]
 carpeta = raiz.parents[2] / "outputs" / "reportes"
 columnas = [
     "VINTAGE",
@@ -45,7 +47,7 @@ Columna = Literal[
     "VINTAGE", "STRATEGY", "STRATEGY_SEGMENT", "PRODUCT", "CHANNEL", "AGE_TAG", "SCORE_TAG"
 ]
 version = "v10"
-colores = ["#0E3A47", "#E4002B", "#7A9CA5", "#F28C9B", "#3D6E7A", "#B5B5B5"]
+colores = list(BANAMEX_PALETTE["chart_colors"])
 
 
 class Filtro(BaseModel):
@@ -960,8 +962,8 @@ def crear_html(rep, datos, pregunta, ruta_docx, fecha=None):
     .logo { height: 48px; margin-bottom: 24px; }
     .dato { margin: 2px 0; font-size: 14px; }
     hr { border: none; border-bottom: 1px solid #BFBFBF; margin: 12px 0 18px; }
-    h1 { color: #0E3A47; font-size: 20px; }
-    h2 { color: #0E3A47; font-size: 16px; margin-top: 22px; }
+    h1 { color: #003B71; font-size: 20px; }
+    h2 { color: #003B71; font-size: 16px; margin-top: 22px; }
     p { text-align: justify; line-height: 1.5; font-size: 14px; }
     table { border-collapse: collapse; width: 100%; font-size: 12.5px; margin: 12px 0; }
     th { text-align: left; border-bottom: 1.5px solid #404040; padding: 4px 6px; }
@@ -1006,7 +1008,7 @@ def guardar_piezas(rep, datos, pregunta, ruta_docx, fecha):
 
 
 def armar_archivos(rep, datos, pregunta, ruta_docx, fecha):
-    # word, html, pdf y piezas, todos con el mismo nombre
+    # Word, HTML, PDF, PPTX 16:9 y piezas JSON, todos con el mismo nombre base
     crear_word(rep, datos, pregunta, ruta=ruta_docx, fecha=fecha)
     guardar_piezas(rep, datos, pregunta, ruta_docx, fecha)
     try:
@@ -1014,6 +1016,26 @@ def armar_archivos(rep, datos, pregunta, ruta_docx, fecha):
         crear_pdf(ruta_html)
     except Exception as e:
         print("no se pudo hacer el html o el pdf", e)
+    try:
+        from src.skills.report_tools import ReportInput, build_pptx_deck
+
+        _, filas = filas_tabla(datos)
+        hallazgos = [rep.resumen] + [p for s in rep.secciones for p in s.parrafos[:1] if p.strip()]
+        tabla_3cols = [
+            [str(row[0]), str(row[1]) if len(row) > 1 else "", str(row[2]) if len(row) > 2 else ""]
+            for row in filas[:6]
+        ]
+        payload = ReportInput(
+            case_id=Path(ruta_docx).stem.upper(),
+            titulo=rep.titulo,
+            hallazgos=hallazgos[:4],
+            dictamen=rep.recomendacion,
+            rutas_graficas=[str(r) for r, _ in datos.get("graficas", [])],
+            tabla_metricas=tabla_3cols,
+        )
+        build_pptx_deck(Path(ruta_docx).with_suffix(".pptx"), payload)
+    except Exception as e:
+        print("no se pudo hacer el pptx", e)
 
 
 def editar_reporte(ruta_docx, cambios):
