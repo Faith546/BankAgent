@@ -43,21 +43,26 @@ Antes de hacer cambios o pedirle código a una IA, revisa estas 4 referencias cl
 uv venv --python 3.11
 uv sync
 
-# 2. Construir base de datos analítica DuckDB (tabla `cubo` + vista `v_cubo_metricas`)
+# 2. (Opcional) Configurar variables locales o servidor remoto GPU en `.env`
+copy .env.example .env
+# Edita `.env` (ignorado en Git) si usas servidor remoto (`OLLAMA_BASE_URL`) o `OLLAMA_NUM_CTX=8192`
+
+# 3. Construir base de datos analítica DuckDB (tabla `cubo` + vista `v_cubo_metricas`)
 uv run python -m src.data.init_db
 
-# 3. Indexar políticas internas en ChromaDB (requiere Ollama abierto)
+# 4. Indexar políticas internas en ChromaDB (requiere Ollama abierto)
 uv run python -c "from src.skills.rag_tools import ingest_policies; print('Chunks:', ingest_policies())"
 
-# 4. Verificar PEP 8 y pruebas unitarias
+# 5. Verificar PEP 8 y pruebas unitarias (27 tests)
+uv run ruff format --check src app tests
 uv run ruff check src app tests
-uv run pytest tests/test_db_reading.py tests/test_skills_and_guardrails.py -v
+uv run pytest tests/test_db_reading.py tests/test_skills_and_guardrails.py tests/test_pr14_modules.py -v
 
-# 5. (Opcional) Smoke test de 4 efectos y benchmark del Golden Dataset con Ollama
+# 6. (Opcional) Smoke test de 4 efectos y benchmark del Golden Dataset con Ollama
 uv run python -m tests.smoke_test_agent
 uv run python -m tests.smoke_test_agent --benchmark
 
-# 6. Levantar la consola ejecutiva en http://localhost:8501
+# 7. Levantar la consola ejecutiva en http://localhost:8501
 uv run streamlit run app/streamlit_app.py
 ```
 
@@ -67,28 +72,34 @@ uv run streamlit run app/streamlit_app.py
 
 ```text
 BankAgent/
+├── .env.example                # Plantilla de variables de entorno (Ollama local/remoto, ctx)
+├── AGENTS.md                   # Reglas automáticas obligatorias para agentes de IA
+├── .github/                    # CI (GitHub Actions PEP 8 + pytest), plantilla PR y Copilot
 ├── .streamlit/                 # Tema corporativo nativo Banamex (config.toml)
 ├── app/
 │   └── streamlit_app.py        # Consola ejecutiva híbrida (alertas, gráficas, dictamen, chat)
 ├── src/
-│   ├── config.py               # Rutas, parámetros Ollama, umbrales y valores válidos del cubo
+│   ├── config.py               # Carga `.env`, rutas, paleta Banamex, modelos y umbrales
 │   ├── data/                   # Ingesta DuckDB (init_db.py) y diccionario Excel
-│   ├── skills/                 # Herramientas tipadas: SQL, Plotly, RAG, PPTX/DOCX y Git
+│   ├── skills/                 # SQL, Plotly, RAG, reportes (.docx/.pptx/.pdf), Git,
+│   │   ├── interpretacion/     # Lectura PDF/DOCX/visión, filtro de dominio y RAG dinámico
+│   │   ├── recuerdame/         # Chats aislados, clasificador y aprendizaje de estilo
+│   │   └── reporte/            # Motor conversacional HTML/PDF integrado con report_tools.py
 │   └── agent/                  # Prompt contract (EN), guardrail numérico y grafo LangGraph
 ├── data/
 │   ├── raw/                    # CSV fuente (ignorado en Git) y Excel diccionario
-│   ├── politicas_internas/     # Manuales normativos (.md/.pdf) para RAG en ChromaDB
+│   ├── politicas_internas/     # Manuales normativos (.md/.pdf/.docx) para RAG en ChromaDB
 │   ├── duckdb/                 # Base cubo_banamex.duckdb generada localmente (ignorada)
 │   ├── chromadb/               # Índice vectorial local (ignorado)
-│   └── state/                  # Checkpoints SqliteSaver de LangGraph (ignorado)
-├── templates/                  # Plantillas base Word y PowerPoint 16:9
-├── outputs/cases/              # Expedientes auditados por caso (DOCX, PPTX, PNG, SQL, JSON)
-├── tests/                      # Pruebas unitarias, Golden Dataset (10 casos) y smoke test
+│   └── state/                  # Checkpoints SqliteSaver y eventos locales (ignorado)
+├── templates/                  # Plantillas corporativas Word y PowerPoint 16:9 (SSOT)
+├── outputs/cases/              # Expedientes auditados por caso (DOCX, PPTX, PDF, PNG, SQL)
+├── tests/                      # 27 pruebas unitarias, Golden Dataset (10 casos) y smoke test
 └── docs/
     ├── README.md               # Índice maestro de documentación
     ├── arquitectura/           # Diagramas, librerías, guardrails y contexto maestro MVP
     ├── contexto/               # Contexto vivo, ADRs, handoffs y resultados de benchmarks
-    ├── guias/                  # Configuración, buenas prácticas y guía de colaboración/IA
+    ├── guias/                  # Manual de usuario, convenciones, buenas prácticas y setups
     └── planeacion/             # Backlog oficial de 13 issues (ISSUES.md) y TASKS.md
 ```
 

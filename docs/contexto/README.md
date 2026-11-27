@@ -9,3 +9,7 @@ Esta carpeta almacena el **contexto acumulativo del proyecto** para que tanto el
 
 ## Regla de mantenimiento
 Al cerrar una issue relevante o tomar una decisión de diseño importante, agrega o actualiza un archivo `.md` aquí (en `snake_case`, sin espacios ni acentos) y enlázalo si aplica en [`docs/README.md`](../README.md).
+
+## Notas Registradas
+* [`pr14_integracion_y_ci.md`](pr14_integracion_y_ci.md) — Integración de PR #14, candados CI/PEP 8, `.env.example` y pruebas unitarias.
+* [`unificacion_reportes.md`](unificacion_reportes.md) — Unificación de `report_tools.py` y `reporte/generar.py` (paleta SSOT y formatos `.docx`/`.pptx`/`.html`/`.pdf`).
