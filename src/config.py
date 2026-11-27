@@ -4,9 +4,29 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from urllib.parse import urlparse
 
 # Rutas principales del proyecto
 PROJECT_ROOT: Path = Path(__file__).resolve().parent.parent
+def _load_dotenv_file(path: Path) -> int:
+    """Carga pares CLAVE=VALOR de un `.env` simple sin pisar variables ya definidas en el entorno."""
+    if not path.is_file():
+        return 0
+    loaded = 0
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.removeprefix("export ").strip()
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+            value = value[1:-1]
+        if key and key not in os.environ:
+            os.environ[key] = value
+            loaded += 1
+    return loaded
+
 DATA_DIR: Path = PROJECT_ROOT / "data"
 DATA_RAW_DIR: Path = DATA_DIR / "raw"
 DUCKDB_DIR: Path = DATA_DIR / "duckdb"
@@ -57,7 +77,7 @@ DUCKDB_PATH: Path = DUCKDB_DIR / "cubo_banamex.duckdb"
 CHECKPOINTS_DB_PATH: Path = STATE_DIR / "checkpoints.db"
 
 # Configuración de Ollama local (cero APIs externas)
-OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_BASE_URL: str = validate_ollama_base_url(os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"))
 OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "qwen3.5:9b")
 OLLAMA_EMBED_MODEL: str = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
 # temperature=0.0 mejora reproducibilidad en tool-calling y análisis numérico
