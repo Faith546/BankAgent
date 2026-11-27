@@ -7,6 +7,29 @@ from pathlib import Path
 
 # Rutas principales del proyecto
 PROJECT_ROOT: Path = Path(__file__).resolve().parent.parent
+
+
+def load_dotenv(env_path: Path | None = None) -> int:
+    """Carga variables de un archivo `.env` sin sobrescribir las ya definidas en el entorno."""
+    target = env_path or (PROJECT_ROOT / ".env")
+    if not target.exists():
+        return 0
+    loaded = 0
+    for raw_line in target.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key and value != "" and key not in os.environ:
+            os.environ[key] = value
+            loaded += 1
+    return loaded
+
+
+load_dotenv()
+
 DATA_DIR: Path = PROJECT_ROOT / "data"
 DATA_RAW_DIR: Path = DATA_DIR / "raw"
 DUCKDB_DIR: Path = DATA_DIR / "duckdb"
