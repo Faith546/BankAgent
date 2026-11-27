@@ -274,7 +274,10 @@ def _guardrail_node(state: AgentState) -> dict[str, Any]:
             "Revisa la evidencia en las herramientas o reformula la consulta."
         )
 
-    passed, issues = verify_response_numbers(draft, tool_evidence)
+    # las cifras que ya salieron en la conversacion previa tambien cuentan como comprobadas
+    primera = next((m for m in state["messages"] if isinstance(m, HumanMessage)), None)
+    contexto = [str(primera.content)] if primera and tool_evidence else []
+    passed, issues = verify_response_numbers(draft, tool_evidence + contexto)
 
     retry_count = state.get("retry_count", 0)
     if not passed and retry_count < 1 and state.get("turn_count", 0) < AGENT_MAX_TURNS:

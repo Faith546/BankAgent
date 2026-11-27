@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
 
 import chromadb
 from chromadb.utils import embedding_functions
@@ -54,27 +53,20 @@ def _get_collection():
 
 
 def ingest_policies(policies_dir: Path | None = None) -> int:
-    """Ingesta todos los archivos .md de políticas internas en ChromaDB."""
+    """Ingesta todos los manuales de políticas internas (.md, .pdf, .docx) en ChromaDB."""
+    # lo importamos aqui adentro porque politicas.py tambien importa este archivo
+    from src.skills.interpretacion import politicas
+
     target_dir = policies_dir or POLICIES_DIR
     if not target_dir.exists():
         raise FileNotFoundError(f"No existe el directorio de políticas: {target_dir}")
 
-    collection = _get_collection()
-    docs: list[str] = []
-    ids: list[str] = []
-    metadatas: list[dict[str, Any]] = []
-
-    for md_file in sorted(target_dir.glob("*.md")):
-        content = md_file.read_text(encoding="utf-8")
-        sections = _split_markdown_sections(content)
-        for idx, section in enumerate(sections):
-            docs.append(section)
-            ids.append(f"{md_file.stem}_sec_{idx}")
-            metadatas.append({"source": md_file.name, "section_index": idx})
-
-    if docs:
-        collection.upsert(ids=ids, documents=docs, metadatas=metadatas)
-    return len(docs)
+    total = 0
+    # usamos la misma funcion que la pestaña de politicas para que todos queden indexados igual
+    for archivo in sorted(target_dir.iterdir()):
+        if archivo.suffix.lower() in politicas.extensiones:
+            total += politicas.indexar(archivo.name, politicas.texto_de(archivo.name, archivo.read_bytes()))
+    return total
 
 
 @tool(args_schema=RagQueryInput)

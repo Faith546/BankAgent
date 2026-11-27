@@ -12,9 +12,15 @@ ruta_eventos = STATE_DIR / "eventos.json"
 ruta_politica = Path(__file__).resolve().parent / "politica.json"
 alpha = 0.1
 
-# cada accion es cuantos caracteres del historial del chat le mandamos al modelo
-acciones = {"historial_corto": 2000, "historial_medio": 4000, "historial_largo": 6000}
+# cada accion es un estilo de respuesta y el texto es la instruccion que le pegamos a la pregunta
+acciones = {
+    "corta": "Responde en máximo 3 oraciones con la cifra principal.",
+    "detallada": "Responde explicando qué significa cada cifra y por qué importa para el riesgo del portafolio. No hagas cuentas ni comparaciones que no vengan en los datos y no uses rangos o promedios que no salgan de las herramientas.",
+    "con_tabla": "Responde corto y pon las cifras en una tabla.",
+}
 sin_respuesta = "el agente no alcanzo a escribir la respuesta"
+# cuando el usuario pide un estilo con sus palabras, este es el estilo que le damos en esa respuesta
+pedido_a_estilo = {"pide_mas_detalle": "detallada", "pide_menos": "corta", "pide_tabla": "con_tabla"}
 
 
 def leer_json(ruta, vacio):
@@ -35,7 +41,7 @@ def escribir_json(ruta, datos):
 
 def recompensa_automatica(respuesta):
     r = clasificador.normalizar(respuesta)
-    # si no hubo respuesta pudo ser por mandarle demasiado historial
+    # si no hubo respuesta el estilo no le sirvio al usuario
     if r.startswith(sin_respuesta):
         return -1
     # si el guardrail aviso es que hubo cifras que no se pudieron comprobar
@@ -44,7 +50,7 @@ def recompensa_automatica(respuesta):
     return 0
 
 
-def registrar_evento(chat_id, texto, tipo, respuesta, accion):
+def registrar_evento(chat_id, texto, tipo, respuesta, accion, opinion="nada"):
     eventos = leer_json(ruta_eventos, [])
     anteriores = [e for e in eventos if e["chat_id"] == chat_id]
     if anteriores:
@@ -53,6 +59,19 @@ def registrar_evento(chat_id, texto, tipo, respuesta, accion):
         # si repite casi la misma pregunta es que la respuesta anterior no le sirvio
         if parecido > 0.8:
             ultimo["recompensa"] = -1
+        # la opinion la saca el modelo rapido en intencion.py, aqui solo decidimos el premio o castigo
+        # si pide mas explicacion la respuesta corta no le alcanzo
+        elif opinion == "pide_mas_detalle" and ultimo["accion"] == "corta":
+            ultimo["recompensa"] = -1
+        # si pide algo mas corto la respuesta detallada se paso
+        elif opinion == "pide_menos" and ultimo["accion"] == "detallada":
+            ultimo["recompensa"] = -1
+        # si pide tabla y no se la dimos tambien es castigo
+        elif opinion == "pide_tabla" and ultimo["accion"] in ("corta", "detallada"):
+            ultimo["recompensa"] = -1
+        # si agradece o dice que estuvo bien la respuesta le sirvio
+        elif opinion == "le_gusto":
+            ultimo["recompensa"] = 1
         # si sigue preguntando del mismo tema la respuesta anterior si le sirvio
         elif ultimo["recompensa"] == 0 and clasificador.entidades(ultimo["texto"]) & clasificador.entidades(texto):
             ultimo["recompensa"] = 0.5
@@ -90,7 +109,10 @@ def softmax(preferencias):
 
 def elegir_accion(tipo):
     politica = leer_json(ruta_politica, {})
-    preferencias = politica.get(tipo, {}).get("H", {a: 0.0 for a in acciones})
+    preferencias = politica.get(tipo, {}).get("H", {})
+    # si el archivo trae las acciones viejas de historial empezamos de cero con los estilos
+    if set(preferencias) != set(acciones):
+        preferencias = {a: 0.0 for a in acciones}
     # sorteamos la accion con las probabilidades de la politica, asi explora solo sin epsilon
     pi = softmax(preferencias)
     return random.choices(list(pi), weights=list(pi.values()))[0]

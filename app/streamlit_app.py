@@ -8,6 +8,7 @@ Sigue las mejores prácticas de diseño y tematización de Streamlit:
 
 from __future__ import annotations
 
+import base64
 import json
 import numbers
 import re
@@ -18,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 import duckdb
+import numpy as np
 import pandas as pd
 import plotly.io as pio
 import streamlit as st
@@ -30,6 +32,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from src.agent.graph import build_agent_graph, make_initial_state  # noqa: E402
 from src.config import (  # noqa: E402
     DUCKDB_PATH,
+    HISTORIAL_CHARS,
     MAX_NCL_RATE_PCT,
     MAX_OVER30_RATE_PCT,
     MIN_MATURE_MOB,
@@ -49,11 +52,13 @@ from src.skills.git_governance import (  # noqa: E402
 from src.skills.report_tools import compilar_entregables_ejecutivos  # noqa: E402
 from src.skills.reporte.generar import editar_reporte, grafica_chat  # noqa: E402
 from src.skills.reporte.generar import generar as generar_reporte  # noqa: E402
-from src.skills.interpretacion import ragDynamico  # noqa: E402
+from src.skills.interpretacion import politicas, ragDynamico  # noqa: E402
 from src.skills.interpretacion.analisis import (  # noqa: E402
     analizar_datos_grafica,
+    leer_intencion,
     leer_documento,
     responder_con_documentos,
+    responder_conversacion,
 )
 from src.skills.interpretacion.dominio import aviso_fuera, es_del_dominio  # noqa: E402
 from src.skills.recuerdame import aprendizaje  # noqa: E402
@@ -266,6 +271,16 @@ def _comprimir_en_fondo(chat_id: str) -> None:
         print("no se pudo comprimir el chat", exc)
 
 
+def _decodificar(valores):
+    # plotly guarda los numeros en binario dentro del json (dtype y bdata), aqui los regresamos a lista
+    if isinstance(valores, dict) and "bdata" in valores:
+        arreglo = np.frombuffer(base64.b64decode(valores["bdata"]), dtype=np.dtype(valores["dtype"]))
+        if "shape" in valores:
+            arreglo = arreglo.reshape([int(n) for n in str(valores["shape"]).split(",")])
+        return arreglo.tolist()
+    return valores
+
+
 def _resumir_figura(fig) -> str:
     # pasamos la grafica a texto con sus datos, asi el agente la analiza sin tomarle captura
     def limpiar(valores):
@@ -287,14 +302,15 @@ def _resumir_figura(fig) -> str:
     lineas = [f"Título  {titulo}"] if titulo else []
     for traza in fig.data:
         nombre = getattr(traza, "name", None) or traza.type
-        if getattr(traza, "z", None) is not None:
-            filas = [limpiar(f) for f in traza.z]
-            lineas.append(f"Serie {nombre} (mapa de calor)  columnas {limpiar(traza.x)}  filas {limpiar(traza.y)}  valores {filas}")
+        x = _decodificar(getattr(traza, "x", None))
+        y = _decodificar(getattr(traza, "y", None))
+        z = _decodificar(getattr(traza, "z", None))
+        if z is not None:
+            filas = [limpiar(f) for f in z]
+            lineas.append(f"Serie {nombre} (mapa de calor)  columnas {limpiar(x)}  filas {limpiar(y)}  valores {filas}")
         else:
-            xs = limpiar(getattr(traza, "x", None))
-            ys = limpiar(getattr(traza, "y", None))
-            lineas.append(f"Serie {nombre}  x {xs}  y {ys}")
-            lineas.extend(_hechos_serie(nombre, getattr(traza, "x", None), getattr(traza, "y", None)))
+            lineas.append(f"Serie {nombre}  x {limpiar(x)}  y {limpiar(y)}")
+            lineas.extend(_hechos_serie(nombre, x, y))
     return "\n".join(lineas)
 
 
@@ -337,19 +353,20 @@ def _hechos_serie(nombre, xs, ys) -> list[str]:
     return hechos
 
 
-def _habla_de_grafica_en_pantalla(texto: str) -> bool:
-    # detecta cuando el usuario pregunta por la grafica que esta viendo y no pide una nueva
-    t = texto.lower()
-    if not re.search(r"gr[aá]fic", t):
-        return False
-    pide_nueva = re.search(r"\bvs\b|\bcontra\b|compara|hazme|\bhaz\b|genera|\bcrea\b|reporte", t)
-    se_refiere = re.search(
-        r"\b(esta|esa|estas|esas)\s+gr[aá]fic|gr[aá]fic\w*\s+(que\s+est[aá]\s+)?(de\s+)?(al\s+)?(lado|costado|izquierda)"
-        r"|\ba\s+mi\s+(lado|costado|izquierda)|\bque\s+(veo|tengo|estoy\s+viendo)|\ben\s+(la\s+)?pantalla"
-        r"|\bsignifica|\bexpl[ií]ca(me)?\s+(la|esta|esa)\s+gr[aá]fic|\bqu[eé]\s+(me\s+)?(dice|muestra)\s+(la|esta|esa)\s+gr[aá]fic",
-        t,
-    )
-    return bool(se_refiere) and not pide_nueva
+def _grafica_en_pantalla(chat) -> dict[str, Any] | None:
+    # en resultados es la ultima grafica que pidio en este chat, en las demas pestañas la de graficas financieras
+    if st.session_state.get("pestana_activa") != PESTANA_RESULTADOS:
+        return st.session_state.get("grafica_actual")
+    graficas = [r for r in chat.get("resultados", []) if r["tipo"] == "grafica"]
+    if not graficas:
+        return None
+    ultima = graficas[-1]
+    figuras = [pio.from_json(f) for f in ultima["figuras"]]
+    return {
+        "titulo": " y ".join(f.layout.title.text or "sin título" for f in figuras),
+        "datos": "\n".join(_resumir_figura(f) for f in figuras),
+        "segmento": f"lo que pidió el usuario, {ultima['titulo']}",
+    }
 
 
 def _send_copilot_message(user_q: str, case_id: str, archivo=None, datos_grafica=None) -> None:
@@ -361,23 +378,34 @@ def _send_copilot_message(user_q: str, case_id: str, archivo=None, datos_grafica
     chat = st.session_state["chat_activo"]
     anteriores = [m[1] for m in chat["mensajes"] if m[0] == "user"]
 
-    # si pregunta por la grafica que tiene en pantalla usamos sus datos, igual que el boton
-    if archivo is None and datos_grafica is None and _habla_de_grafica_en_pantalla(user_q):
-        datos_grafica = st.session_state.get("grafica_actual")
+    # el modelo que escogio el usuario nos dice a donde va la pregunta y que opina de la respuesta anterior
+    modelo = OLLAMA_MODELOS[st.session_state.get("modelo_elegido") or "Normal"]
+    respuestas = [m[1] for m in chat["mensajes"] if m[0] == "assistant"]
+    intencion = leer_intencion(user_q, respuestas[-1] if respuestas else "", modelo)
 
-    # la politica escoge cuanto historial le mandamos al modelo
+    # si pregunta por la grafica que tiene en pantalla usamos la de la pestaña que esta viendo
+    if archivo is None and datos_grafica is None and intencion.destino == "grafica_en_pantalla":
+        datos_grafica = _grafica_en_pantalla(chat)
+
+    # vemos que tipo de pregunta es para saber a donde mandarla
     if archivo is not None:
         tipo = "documento"
     elif datos_grafica is not None:
         tipo = "grafica_panel"
-    elif "reporte" in user_q.lower():
-        tipo = "reporte"
-    elif re.search(r"gr[aá]fic", user_q.lower()):
-        tipo = "grafica"
+    elif intencion.destino in ("reporte", "grafica", "conversacion"):
+        tipo = intencion.destino
     else:
         tipo = "agente"
-    accion = aprendizaje.elegir_accion(tipo)
-    historial = memoria.ultimos_mensajes(chat, limite=aprendizaje.acciones[accion])
+    # la politica escoge el estilo de respuesta en las preguntas al agente, el historial va fijo
+    accion = aprendizaje.elegir_accion(tipo) if tipo == "agente" else None
+    # si el usuario pidio un estilo con sus palabras le hacemos caso en esta respuesta, tambien en documentos y graficas,
+    # y esa respuesta no cuenta para aprender porque no la escogio la politica
+    forzado = tipo in ("agente", "documento", "grafica_panel") and intencion.opinion in aprendizaje.pedido_a_estilo
+    if forzado:
+        accion = aprendizaje.pedido_a_estilo[intencion.opinion]
+    # si no hay estilo, documentos y graficas usan su formato de siempre
+    estilo = aprendizaje.acciones.get(accion, "")
+    historial = memoria.ultimos_mensajes(chat, limite=HISTORIAL_CHARS)
 
     chat["mensajes"].append(["user", user_q])
     # con la primera pregunta el agente le pone nombre clave al chat
@@ -398,7 +426,7 @@ def _send_copilot_message(user_q: str, case_id: str, archivo=None, datos_grafica
                 ragDynamico.guardar_documento(chat["id"], archivo.name, texto)
                 chat["documento"] = {"nombre": archivo.name}
                 fragmentos = ragDynamico.buscar(chat["id"], user_q)
-                answer = responder_con_documentos(user_q, fragmentos, historial)
+                answer = responder_con_documentos(user_q, fragmentos, historial, modelo, estilo)
         except Exception as exc:  # noqa: BLE001
             answer = f"No se pudo leer el documento. {exc}"
 
@@ -406,10 +434,17 @@ def _send_copilot_message(user_q: str, case_id: str, archivo=None, datos_grafica
         # la grafica de graficas financieras se analiza con sus datos, sin vision
         try:
             answer = analizar_datos_grafica(
-                datos_grafica["titulo"], datos_grafica["datos"], datos_grafica["segmento"], historial
+                datos_grafica["titulo"], datos_grafica["datos"], datos_grafica["segmento"], historial, modelo, estilo
             )
         except Exception as exc:  # noqa: BLE001
             answer = f"No se pudo analizar la gráfica. {exc}"
+
+    elif tipo == "conversacion":
+        # si solo comenta o agradece no consultamos el cubo, contestamos breve
+        try:
+            answer = responder_conversacion(user_q, historial, modelo)
+        except Exception as exc:  # noqa: BLE001
+            answer = f"No se pudo contestar. {exc}"
 
     elif tipo == "reporte":
         pregunta = user_q
@@ -459,7 +494,8 @@ def _send_copilot_message(user_q: str, case_id: str, archivo=None, datos_grafica
                 fragmentos = ragDynamico.buscar(chat["id"], user_q)
             except Exception as exc:  # noqa: BLE001
                 print("no se pudo buscar en el rag", exc)
-        prompt_agente = user_q
+        # le pegamos a la pregunta el estilo que escogio la politica
+        prompt_agente = f"{user_q}\n\n{aprendizaje.acciones[accion]}"
         if historial or fragmentos:
             # el historial solo sirve para entender referencias, no para limitar la pregunta nueva
             prompt_agente = (
@@ -469,9 +505,8 @@ def _send_copilot_message(user_q: str, case_id: str, archivo=None, datos_grafica
             )
             if fragmentos:
                 prompt_agente += f"Fragmentos de documentos del chat\n{fragmentos}\n\n"
-            prompt_agente += f"Pregunta actual  {user_q}"
+            prompt_agente += f"Pregunta actual  {user_q}\n\n{aprendizaje.acciones[accion]}"
         try:
-            modelo = OLLAMA_MODELOS[st.session_state.get("modelo_elegido") or "Normal"]
             chat_graph = build_agent_graph(with_interrupt=False)
             # cada pregunta va en su propio hilo porque el historial ya se lo pasamos nosotros,
             # si se usa el mismo hilo langgraph acumula todos los mensajes y se llena el contexto
@@ -513,7 +548,7 @@ def _send_copilot_message(user_q: str, case_id: str, archivo=None, datos_grafica
         mensaje += [str(ruta), figuras]
     chat["mensajes"].append(mensaje)
     memoria.guardar_chat(chat)
-    aprendizaje.registrar_evento(chat["id"], user_q, tipo, answer, accion)
+    aprendizaje.registrar_evento(chat["id"], user_q, tipo, answer, None if forzado else accion, intencion.opinion)
     # si la conversacion ya crecio se comprime en segundo plano
     threading.Thread(target=_comprimir_en_fondo, args=(chat["id"],), daemon=True).start()
 
@@ -614,11 +649,35 @@ def _render_sidebar() -> dict[str, Any] | None:
             )
 
         st.divider()
+        # mostramos como va aprendiendo la politica el estilo que le gusta al usuario
+        with st.container(border=True):
+            st.markdown("**:material/psychology: Lo que el agente ha aprendido de ti**")
+            tabla_estilos = aprendizaje.leer_json(aprendizaje.ruta_politica, {}).get("agente", {})
+            probabilidades = tabla_estilos.get("probabilidades", {})
+            if set(probabilidades) != set(aprendizaje.acciones):
+                probabilidades = aprendizaje.softmax({a: 0.0 for a in aprendizaje.acciones})
+            nombres_estilos = {"corta": "Respuesta corta", "detallada": "Respuesta detallada", "con_tabla": "Con tabla"}
+            for estilo, probabilidad in probabilidades.items():
+                st.progress(probabilidad, text=f"{nombres_estilos[estilo]} {probabilidad:.0%}")
+            st.caption(f"Aprendido de {tabla_estilos.get('n', 0)} respuestas, se actualiza cada 6 preguntas.")
+
+        st.divider()
         think_tag = "ON" if OLLAMA_REASONING else "OFF"
         st.caption(
             f":material/memory: `{OLLAMA_MODEL}` · think `{think_tag}` · ctx `{OLLAMA_NUM_CTX:,}`"
         )
         return case
+
+
+# nombres de las pestañas, los usamos para pintarlas y para saber cual esta abierta
+PESTANA_RESULTADOS = ":material/inventory_2: Resultados"
+PESTANAS = [
+    ":material/monitoring: Gráficas Financieras",
+    ":material/edit_document: Dictamen & Human-in-the-Loop",
+    ":material/database: Auditoría SQL & Telemetría",
+    PESTANA_RESULTADOS,
+    ":material/policy: Políticas",
+]
 
 
 def main() -> None:
@@ -717,13 +776,9 @@ def main() -> None:
     col_main, col_chat = st.columns([1.75, 1.0], gap="medium")
 
     with col_main:
-        tab_viz, tab_dictamen, tab_audit, tab_resultados = st.tabs(
-            [
-                ":material/monitoring: Gráficas Financieras",
-                ":material/edit_document: Dictamen & Human-in-the-Loop",
-                ":material/database: Auditoría SQL & Telemetría",
-                ":material/inventory_2: Resultados",
-            ]
+        # con la llave sabemos que pestaña tiene abierta el usuario, asi la grafica a mi lado es la que esta viendo
+        tab_viz, tab_dictamen, tab_audit, tab_resultados, tab_politicas = st.tabs(
+            PESTANAS, key="pestana_activa", on_change="rerun"
         )
 
         # aviso de que el agente dejo algo nuevo en resultados, streamlit no deja cambiar de pestaña solo
@@ -1145,6 +1200,52 @@ def main() -> None:
                                     on_click=aprendizaje.dar_recompensa,
                                     args=(chat_res["id"], 1),
                                 )
+
+        with tab_politicas:
+            # subimos los manuales que consulta el agente, igual que resultados pero en vez de descargar se sube
+            with st.container(border=True):
+                st.markdown("#### :material/upload_file: Subir o actualizar una política")
+                st.caption(
+                    "Si el archivo se llama igual que uno que ya existe, lo reemplaza. "
+                    "El agente usa la versión nueva desde la siguiente pregunta."
+                )
+                with st.form("form_politica", clear_on_submit=True):
+                    nuevo_manual = st.file_uploader("Manual de política", type=["md", "pdf", "docx"])
+                    if st.form_submit_button("Subir política", icon=":material/upload:"):
+                        if nuevo_manual is None:
+                            st.warning("Primero escoge un archivo.")
+                        else:
+                            with st.spinner("Leyendo el manual y guardándolo en ChromaDB..."):
+                                try:
+                                    total = politicas.guardar_politica(nuevo_manual.name, nuevo_manual.getvalue())
+                                    st.success(f"{nuevo_manual.name} quedó cargado con {total} secciones.")
+                                except Exception as exc:  # noqa: BLE001
+                                    st.error(f"No se pudo cargar la política. {exc}")
+
+            manuales = politicas.listar_politicas()
+            if not manuales:
+                st.info("Aquí aparecerán las políticas que consulta el agente.", icon=":material/policy:")
+            for manual in manuales:
+                # cada politica va en su tarjeta como en resultados
+                with st.container(border=True):
+                    st.markdown(f"#### :material/description: {manual['nombre']}")
+                    estado = (
+                        f"{manual['secciones']} secciones en ChromaDB"
+                        if manual["secciones"]
+                        else "Sin indexar, vuelve a subirlo"
+                    )
+                    st.caption(f"{manual['fecha']} · {estado}")
+                    with st.expander("Ver contenido", icon=":material/visibility:"):
+                        try:
+                            st.markdown(politicas.contenido_politica(manual["nombre"]) or "Sin contenido guardado.")
+                        except Exception as exc:  # noqa: BLE001
+                            st.caption(f"No se pudo leer el contenido. {exc}")
+                    # el borrado pide confirmacion para no quitar una politica por accidente
+                    with st.popover("Borrar", icon=":material/delete:"):
+                        st.write(f"¿Seguro que quieres borrar {manual['nombre']}?")
+                        if st.button("Sí, borrar", key=f"borrar_politica_{manual['nombre']}", type="primary"):
+                            politicas.borrar_politica(manual["nombre"])
+                            st.rerun()
 
     # ------------------------------------------------------------------
     # PANEL DERECHO: CHAT COPILOTO INVESTIGADOR

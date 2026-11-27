@@ -162,3 +162,6 @@ OLLAMA_MODELOS: dict[str, str] = {
     "Normal": "qwen3.5:9b",
     "Potente": "gpt-oss:20b",
 }
+
+# caracteres del historial del chat que le mandamos al modelo en cada pregunta
+HISTORIAL_CHARS: int = 4000
