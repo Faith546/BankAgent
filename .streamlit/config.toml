@@ -41,7 +41,6 @@ secondaryBackgroundColor = "#111827"
 textColor = "#F8FAFC"
 borderColor = "#334155"
 showWidgetBorder = true
-showSidebarBorder = true
 dataframeHeaderBackgroundColor = "#1E293B"
 dataframeHeaderTextColor = "#F8FAFC"
 dataframeBorderColor = "#334155"
