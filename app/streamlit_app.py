@@ -49,7 +49,7 @@ from src.skills.git_governance import (  # noqa: E402
     get_case_diff,
     save_case_artifacts,
 )
-from src.skills.interpretacion import politicas, ragDynamico  # noqa: E402
+from src.skills.interpretacion import politicas, rag_dinamico  # noqa: E402
 from src.skills.interpretacion.analisis import (  # noqa: E402
     analizar_datos_grafica,
     leer_documento,
@@ -446,9 +446,9 @@ def _send_copilot_message(user_q: str, case_id: str, archivo=None, datos_grafica
             if not es_del_dominio(texto):
                 answer = aviso_fuera
             else:
-                ragDynamico.guardar_documento(chat["id"], archivo.name, texto)
+                rag_dinamico.guardar_documento(chat["id"], archivo.name, texto)
                 chat["documento"] = {"nombre": archivo.name}
-                fragmentos = ragDynamico.buscar(chat["id"], user_q)
+                fragmentos = rag_dinamico.buscar(chat["id"], user_q)
                 answer = responder_con_documentos(user_q, fragmentos, historial, modelo, estilo)
         except Exception as exc:  # noqa: BLE001
             answer = f"No se pudo leer el documento. {exc}"
@@ -532,7 +532,7 @@ def _send_copilot_message(user_q: str, case_id: str, archivo=None, datos_grafica
         fragmentos = ""
         if chat.get("documento"):
             try:
-                fragmentos = ragDynamico.buscar(chat["id"], user_q)
+                fragmentos = rag_dinamico.buscar(chat["id"], user_q)
             except Exception as exc:  # noqa: BLE001
                 print("no se pudo buscar en el rag", exc)
         # le pegamos a la pregunta el estilo que escogio la politica
@@ -641,7 +641,7 @@ def _render_chats() -> None:
             memoria.borrar_chat(chat["id"])
             aprendizaje.borrar_eventos_chat(chat["id"])
             try:
-                ragDynamico.borrar_documentos_chat(chat["id"])
+                rag_dinamico.borrar_documentos_chat(chat["id"])
             except Exception as exc:  # noqa: BLE001
                 print("no se pudo borrar del rag", exc)
             restantes = memoria.listar_chats()

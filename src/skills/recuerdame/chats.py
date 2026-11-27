@@ -8,7 +8,7 @@ from langchain_ollama import ChatOllama
 
 from src.config import OLLAMA_BASE_URL, OLLAMA_MODEL
 
-carpeta = Path(__file__).resolve().parent / "chatsPasados"
+carpeta = Path(__file__).resolve().parent / "chats_pasados"
 # Cuando lo no resumido pasa de este tamaño se comprime, dejando los ultimos tal cual
 umbral_comprimir = 3000
 recientes = 4

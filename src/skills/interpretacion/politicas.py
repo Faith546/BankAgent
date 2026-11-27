@@ -4,7 +4,7 @@ from pathlib import Path
 from src.config import POLICIES_DIR
 from src.skills.interpretacion.analisis import leer_documento
 from src.skills.interpretacion.dominio import aviso_fuera, es_del_dominio
-from src.skills.interpretacion.ragDynamico import partir
+from src.skills.interpretacion.rag_dinamico import partir
 from src.skills.rag_tools import _get_collection, _split_markdown_sections
 
 extensiones = [".md", ".pdf", ".docx"]

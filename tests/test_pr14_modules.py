@@ -8,13 +8,13 @@ import pymupdf
 import pytest
 from docx import Document
 
-from src.skills.interpretacion import analisis, dominio, leerdocx, leerpdf, politicas, ragDynamico
+from src.skills.interpretacion import analisis, dominio, leerdocx, leerpdf, politicas, rag_dinamico
 from src.skills.recuerdame import aprendizaje, chats, clasificador
 from src.skills.reporte import generar
 
 
 # ---------------------------------------------------------------------------
-# 1. interpretacion (leerdocx, leerpdf, ragDynamico, dominio, politicas, analisis)
+# 1. interpretacion (leerdocx, leerpdf, rag_dinamico, dominio, politicas, analisis)
 # ---------------------------------------------------------------------------
 def test_leer_docx_extracts_paragraphs_and_tables() -> None:
     """Verifica extracción de párrafos y tablas desde bytes .docx."""
@@ -59,9 +59,9 @@ def test_leer_documento_rejects_unsupported_extensions() -> None:
 def test_rag_dinamico_partir_chunks_with_overlap() -> None:
     """Verifica particionado con traslape de textos largos."""
     texto = "A" * 1600
-    pedazos = ragDynamico.partir(texto)
+    pedazos = rag_dinamico.partir(texto)
     assert len(pedazos) == 3
-    assert len(pedazos[0]) == ragDynamico.tamano
+    assert len(pedazos[0]) == rag_dinamico.tamano
 
 
 def test_dominio_accepts_banking_and_rejects_empty() -> None:
@@ -195,3 +195,24 @@ def test_reporte_unification_uses_ssot_palette_and_facade() -> None:
     assert callable(report_tools.editar_reporte_chat)
     assert callable(report_tools.grafica_chat)
     assert callable(report_tools.build_pptx_deck)
+
+
+def test_config_load_dotenv(tmp_path, monkeypatch) -> None:
+    """Verifica carga automática de `.env` sin pisar variables ya definidas en el sistema."""
+    import os
+
+    from src.config import load_dotenv
+
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "# comentario\nTEST_BA_URL=http://10.0.0.5:11434\nTEST_BA_EXISTING=from_file\nEMPTY_VAR=\n",
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("TEST_BA_URL", raising=False)
+    monkeypatch.setenv("TEST_BA_EXISTING", "from_shell")
+
+    count = load_dotenv(env_file)
+    assert count == 1
+    assert os.environ["TEST_BA_URL"] == "http://10.0.0.5:11434"
+    assert os.environ["TEST_BA_EXISTING"] == "from_shell"
+    monkeypatch.delenv("TEST_BA_URL", raising=False)
