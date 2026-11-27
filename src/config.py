@@ -27,6 +27,37 @@ def _load_dotenv_file(path: Path) -> int:
             loaded += 1
     return loaded
 
+# Las variables reales del entorno siempre ganan sobre el `.env`
+_load_dotenv_file(PROJECT_ROOT / ".env")
+
+
+def validate_ollama_base_url(url: str) -> str:
+    """Valida y normaliza `OLLAMA_BASE_URL` (solo `http://host[:puerto]`, sin TLS ni rutas)."""
+    cleaned = (url or "").strip().rstrip("/")
+    if cleaned.lower().startswith("https://"):
+        raise ValueError(
+            f"OLLAMA_BASE_URL={url!r} usa https://, pero Ollama sirve HTTP sin TLS. "
+            f"Usa 'http://{cleaned[8:]}'."
+        )
+    if not cleaned.lower().startswith("http://"):
+        raise ValueError(
+            f"OLLAMA_BASE_URL={url!r} debe empezar con 'http://' "
+            "(ejemplo: http://192.168.1.50:11434 o http://localhost:11434)."
+        )
+    parsed = urlparse(cleaned)
+    if not parsed.hostname:
+        raise ValueError(f"OLLAMA_BASE_URL={url!r} no incluye host.")
+    try:
+        _ = parsed.port
+    except ValueError as exc:
+        raise ValueError(f"OLLAMA_BASE_URL={url!r} tiene un puerto inválido.") from exc
+    if parsed.path or parsed.query or parsed.fragment:
+        raise ValueError(
+            f"OLLAMA_BASE_URL={url!r} no debe incluir ruta ni parámetros; "
+            "usa solo http://host:puerto."
+        )
+    return cleaned
+
 DATA_DIR: Path = PROJECT_ROOT / "data"
 DATA_RAW_DIR: Path = DATA_DIR / "raw"
 DUCKDB_DIR: Path = DATA_DIR / "duckdb"
