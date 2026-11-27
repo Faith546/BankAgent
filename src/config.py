@@ -16,6 +16,7 @@ POLICIES_DIR: Path = DATA_DIR / "politicas_internas"
 TEMPLATES_DIR: Path = PROJECT_ROOT / "templates"
 OUTPUTS_DIR: Path = PROJECT_ROOT / "outputs"
 CASES_DIR: Path = OUTPUTS_DIR / "cases"
+MEMORIA_UTIL_DIR: Path = DATA_DIR / "memoria_util"
 
 
 def resolve_raw_csv_path() -> Path:
@@ -63,7 +64,7 @@ OLLAMA_EMBED_MODEL: str = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
 OLLAMA_TEMPERATURE: float = float(os.getenv("OLLAMA_TEMPERATURE", "0.0"))
 # reasoning=False (think: False en Ollama) evita que qwen3.5:9b gaste miles de tokens pensando
 OLLAMA_REASONING: bool = _parse_bool_env("OLLAMA_REASONING", False)
-OLLAMA_NUM_CTX: int = int(os.getenv("OLLAMA_NUM_CTX", "8192"))
+OLLAMA_NUM_CTX: int = int(os.getenv("OLLAMA_NUM_CTX", "16384"))
 OLLAMA_TOP_K: int | None = _parse_optional_int("OLLAMA_TOP_K")
 OLLAMA_TOP_P: float | None = _parse_optional_float("OLLAMA_TOP_P")
 
@@ -152,3 +153,12 @@ VALID_SCORE_TAGS: tuple[str, ...] = (
 
 VINTAGE_MIN: int = 202401
 VINTAGE_MAX: int = 202609
+
+OLLAMA_VISION_MODEL = "qwen2.5vl:7b"
+
+# modelos que el usuario puede escoger en la app, el normal es el de siempre
+OLLAMA_MODELOS: dict[str, str] = {
+    "Rápido": "qwen3.5:4b",
+    "Normal": "qwen3.5:9b",
+    "Potente": "gpt-oss:20b",
+}

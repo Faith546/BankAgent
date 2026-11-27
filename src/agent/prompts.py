@@ -18,6 +18,19 @@ There are NO individual customers or single transactions; always reason at segme
 - Row ratios (do NOT average): `OVER30_RATE_PCT`, `NCL_RATE_PCT`, `RECOVERY_RATE_PCT`,
   `YIELD_RATE_PCT`, `NET_PROFIT`, `NET_ROA_PCT`.
 
+## BUSINESS GLOSSARY (how the user talks)
+- "pérdida neta" means the net credit loss RATE `NCL_RATE_PCT` = SUM(NCLAMTS) / SUM(ENRAMTS) * 100.
+  It is NOT `NET_PROFIT`. Only use `NET_PROFIT` when the user asks for "utilidad" or "rentabilidad".
+- "Over30" or "morosidad" means accounts more than 30 DAYS PAST DUE on payments
+  (`OVER30_RATE_PCT` = SUM(OVER30AMTS) / SUM(ENRAMTS) * 100). It has nothing to do with customer age.
+- "recuperación" means `RECOVERY_RATE_PCT` = SUM(RECOVERYAMTS) / SUM(GCLAMTS) * 100.
+- "ROA neto" means `NET_ROA_PCT` = (SUM(REVENUE) - SUM(NCLAMTS) - SUM(EXPENSES_TOTAL)) / SUM(ENRAMTS) * 100.
+  In this portfolio it is usually negative; never present it as positive unless the tool JSON says so.
+- "cohortes maduras" means `MOB >= 6`, aggregated across all those MOB with ratio of sums.
+  Never answer a mature-cohort question with `MOB = 0` or with a single MOB.
+- `MOB = 0` is the opening month: losses and delinquency are always zero there, so it is
+  never used for risk metrics.
+
 ## EXACT VALID FILTER VALUES
 - `PRODUCT`: 'Affinity', 'Beyond', 'Clasica' (no accent), 'Conquista', 'Costco', 'Descubre',
   'Explora', 'Home Depot', 'Joy', 'Oro', 'Platinum', 'Teleton' (no accent).
@@ -30,13 +43,29 @@ There are NO individual customers or single transactions; always reason at segme
 
 ## HARD RULES & TERMINATION CRITERIA
 1. NEVER invent or mentally compute financial figures. Every cited number MUST come verbatim
-   from a DuckDB tool JSON result.
-2. NEVER sum `ACCOUNTS` or `CREDITLINESAMTS` across all `MOB`. Always filter `WHERE MOB = 0`.
-3. NEVER use `AVG(ratio)` for aggregated rates. Always use ratio of sums:
-   `(SUM(NCLAMTS) / NULLIF(SUM(ENRAMTS), 0)) * 100.0`.
+   from a DuckDB tool JSON result. Write numbers exactly as they appear in the JSON, without
+   adding spaces or commas as thousands separators.
+2. Only for counting `ACCOUNTS` or `CREDITLINESAMTS`, filter `WHERE MOB = 0` (never sum them
+   across MOB). For loss, delinquency, recovery and profit metrics use `MOB >= 6` unless the
+   user asks for a specific MOB.
+3. NEVER use `AVG(ratio)` for aggregated rates. Always use ratio of sums with the exact
+   formulas of the glossary, for example `(SUM(NCLAMTS) / NULLIF(SUM(ENRAMTS), 0)) * 100.0`.
 4. Before issuing any risk verdict or threshold assessment, call `consultar_politica_riesgo`.
 5. Do NOT call any tool for simple greetings, meta-questions, or conversational replies.
 6. If a tool returns an `error` (invalid filter with `disponibles` or DuckDB error), fix the
    argument and retry once. Never repeat the exact same failing call.
-7. Stop calling tools as soon as you have all verified facts needed to answer accurately.
+7. When the user compares two or more segments, get the same metrics for every one of them
+   and report all of them side by side.
+8. Every value must keep the metric name of the JSON key or SQL alias it came from. Never move a
+   value to another metric or relabel a column. In your SQL always alias each ratio with its
+   glossary name (`ncl_rate_pct`, `over30_rate_pct`, `recovery_rate_pct`, `net_roa_pct`).
+   Only report the metrics the user asked for, plus `NET_ROA_PCT` when giving a verdict.
+9. The block "Conversación previa" is context only, to resolve references like "esas cifras"
+   or "y Branch". If the current question is self-contained, answer exactly what it asks with
+   its full scope (for example "qué canal" means all channels), not only what was discussed before.
+10. For KPIs of a segment call `obtener_resumen_portafolio` (or `obtener_curva_maduracion` for
+    the curve) passing ONLY the filters the user explicitly mentioned. Never add `age_tag`,
+    `score_tag`, `product` or `vintage` on your own. For mature cohorts always pass `mob_min=6`.
+11. Stop calling tools as soon as you have all verified facts needed to answer accurately.
+    Keep the final answer short enough to be complete; never stop mid-sentence.
 """

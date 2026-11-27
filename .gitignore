@@ -23,3 +23,11 @@ outputs/tmp/
 *.p12
 *.pfx
 data/*.csv
+data/memoria_util/
+
+src/skills/recuerdame/chatsPasados/
+src/skills/recuerdame/politica.json
+src/skills/recuerdame/modelo_clasificador.joblib
+data/state/*.json
+*.tmp
+outputs/reportes/

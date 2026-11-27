@@ -63,13 +63,15 @@ class AgentState(TypedDict):
     turn_count: int
     seen_calls: list[str]
     token_usage: dict[str, Any]
+    modelo: str
 
 
-def make_initial_state(prompt: str, case_id: str = "CASO-2026-0001") -> AgentState:
+def make_initial_state(prompt: str, case_id: str = "CASO-2026-0001", modelo: str = OLLAMA_MODEL) -> AgentState:
     """Construye el estado inicial limpio para invocar el grafo."""
     return {
         "messages": [HumanMessage(content=prompt)],
         "case_id": case_id,
+        "modelo": modelo,
         "sql_queries": [],
         "evidence": [],
         "draft_dictamen": "",
@@ -88,19 +90,24 @@ def make_initial_state(prompt: str, case_id: str = "CASO-2026-0001") -> AgentSta
     }
 
 
-def _get_llm_with_tools():
+def _get_llm(modelo: str = OLLAMA_MODEL):
     kwargs: dict[str, Any] = {
         "base_url": OLLAMA_BASE_URL,
-        "model": OLLAMA_MODEL,
+        "model": modelo,
         "temperature": OLLAMA_TEMPERATURE,
-        "reasoning": OLLAMA_REASONING,
+        # gpt-oss no deja apagar el razonamiento, solo bajarlo, por eso le pedimos el nivel bajo
+        "reasoning": "low" if modelo.startswith("gpt-oss") else OLLAMA_REASONING,
         "num_ctx": OLLAMA_NUM_CTX,
     }
     if OLLAMA_TOP_K is not None:
         kwargs["top_k"] = OLLAMA_TOP_K
     if OLLAMA_TOP_P is not None:
         kwargs["top_p"] = OLLAMA_TOP_P
-    return ChatOllama(**kwargs).bind_tools(TOOLS)
+    return ChatOllama(**kwargs)
+
+
+def _get_llm_with_tools(modelo: str = OLLAMA_MODEL):
+    return _get_llm(modelo).bind_tools(TOOLS)
 
 
 def _extract_token_usage(
@@ -123,7 +130,7 @@ def _extract_token_usage(
 
 
 def _agent_node(state: AgentState) -> dict[str, Any]:
-    llm_tools = _get_llm_with_tools()
+    llm_tools = _get_llm_with_tools(state.get("modelo", OLLAMA_MODEL))
     messages = [SystemMessage(content=SYSTEM_PROMPT), *state["messages"]]
     t0 = time.perf_counter()
     response = llm_tools.invoke(messages)
@@ -138,12 +145,42 @@ def _agent_node(state: AgentState) -> dict[str, Any]:
 
 def _route_after_agent(state: AgentState) -> str:
     last_msg = state["messages"][-1]
+    pide_tools = isinstance(last_msg, AIMessage) and bool(getattr(last_msg, "tool_calls", None))
+    sin_texto = isinstance(last_msg, AIMessage) and not str(last_msg.content).strip()
     # Guardrail 2: Tope explícito de vueltas para evitar bucles infinitos
     if state.get("turn_count", 0) >= AGENT_MAX_TURNS:
-        return "guardrail"
-    if isinstance(last_msg, AIMessage) and getattr(last_msg, "tool_calls", None):
+        # si se acabaron las vueltas a medio camino le damos una ultima vuelta para cerrar la respuesta
+        return "final" if pide_tools or sin_texto else "guardrail"
+    if pide_tools:
         return "tools"
+    # si termino sin escribir nada tambien le pedimos que cierre la respuesta
+    if sin_texto:
+        return "final"
     return "guardrail"
+
+
+def _final_node(state: AgentState) -> dict[str, Any]:
+    """Ultima vuelta sin herramientas para que el agente cierre la respuesta con lo que ya tiene."""
+    mensajes = list(state["messages"])
+    # quitamos las llamadas a herramientas que ya no se van a ejecutar
+    if isinstance(mensajes[-1], AIMessage) and getattr(mensajes[-1], "tool_calls", None):
+        mensajes[-1] = AIMessage(content=str(mensajes[-1].content))
+    cierre = HumanMessage(
+        content=(
+            "FINAL: You cannot call more tools. Write the complete final answer in Spanish now, "
+            "using only the verified figures already returned by the tools. Do not stop mid-sentence."
+        )
+    )
+    llm = _get_llm(state.get("modelo", OLLAMA_MODEL))
+    t0 = time.perf_counter()
+    response = llm.invoke([SystemMessage(content=SYSTEM_PROMPT), *mensajes, cierre])
+    elapsed = time.perf_counter() - t0
+    token_usage = _extract_token_usage(response, state.get("token_usage", {}), elapsed)
+    return {
+        "messages": [response],
+        "turn_count": state.get("turn_count", 0) + 1,
+        "token_usage": token_usage,
+    }
 
 
 def _tools_node(state: AgentState) -> dict[str, Any]:
@@ -288,6 +325,7 @@ def build_agent_graph(with_interrupt: bool = True):
     builder = StateGraph(AgentState)
     builder.add_node("agent", _agent_node)
     builder.add_node("tools", _tools_node)
+    builder.add_node("final", _final_node)
     builder.add_node("guardrail", _guardrail_node)
     builder.add_node("human_review", _human_review_node)
 
@@ -295,9 +333,10 @@ def build_agent_graph(with_interrupt: bool = True):
     builder.add_conditional_edges(
         "agent",
         _route_after_agent,
-        {"tools": "tools", "guardrail": "guardrail"},
+        {"tools": "tools", "guardrail": "guardrail", "final": "final"},
     )
     builder.add_edge("tools", "agent")
+    builder.add_edge("final", "guardrail")
     builder.add_conditional_edges(
         "guardrail",
         _route_after_guardrail,
