@@ -4,7 +4,13 @@ from typing import Literal
 from langchain_ollama import ChatOllama
 from pydantic import BaseModel
 
-from src.config import MAX_NCL_RATE_PCT, MAX_OVER30_RATE_PCT, OLLAMA_BASE_URL, OLLAMA_MODEL, OLLAMA_NUM_CTX
+from src.config import (
+    MAX_NCL_RATE_PCT,
+    MAX_OVER30_RATE_PCT,
+    OLLAMA_BASE_URL,
+    OLLAMA_MODEL,
+    OLLAMA_NUM_CTX,
+)
 from src.skills.interpretacion.imagenes import leer_imagen, leer_pdf_escaneado
 from src.skills.interpretacion.leerdocx import leer_docx
 from src.skills.interpretacion.leerpdf import leer_pdf
@@ -31,23 +37,29 @@ def analizar_documento(archivo, nombre, pregunta):
     if not texto:
         return "No se encontró texto en el documento."
 
-    llm = ChatOllama(model=OLLAMA_MODEL, base_url=OLLAMA_BASE_URL, temperature=0.2, reasoning=False,
-                     num_ctx=OLLAMA_NUM_CTX, num_predict=1500)
+    llm = ChatOllama(
+        model=OLLAMA_MODEL,
+        base_url=OLLAMA_BASE_URL,
+        temperature=0.2,
+        reasoning=False,
+        num_ctx=OLLAMA_NUM_CTX,
+        num_predict=1500,
+    )
     # cortamos el texto para que quepa en el contexto del modelo
-    texto = texto[:OLLAMA_NUM_CTX * 2]
-    prompt = f"""Eres analista senior de riesgos del portafolio de tarjetas de Banamex.
-Regla principal, todas las cifras van con dígitos copiadas tal cual del documento, por ejemplo 5.57% o $242.1 millones. Nunca escribas un número con letra.
-Las cantidades de dinero son pesos mexicanos, nunca digas dólares.
-Responde la pregunta usando solo lo que dice el documento de abajo, no inventes ni recalcules.
-Si la respuesta no está en el documento dilo.
-Cuando uses un dato di de qué página o tabla sale si el documento lo indica.
-Responde en un solo párrafo de 3 a 6 oraciones.
-Escribe en prosa, sin viñetas, sin markdown y sin dos puntos.
-
-Pregunta  {pregunta}
-
-Documento {nombre}
-{texto}"""
+    texto = texto[: OLLAMA_NUM_CTX * 2]
+    prompt = (
+        "Eres analista senior de riesgos del portafolio de tarjetas de Banamex.\n"
+        "Regla principal: todas las cifras van con dígitos copiadas tal cual del documento "
+        "(ej. 5.57% o $242.1 millones). Nunca escribas un número con letra.\n"
+        "Las cantidades de dinero son pesos mexicanos, nunca digas dólares.\n"
+        "Responde la pregunta usando solo lo que dice el documento, no inventes ni recalcules.\n"
+        "Si la respuesta no está en el documento dilo.\n"
+        "Cuando uses un dato di de qué página o tabla sale si el documento lo indica.\n"
+        "Responde en un solo párrafo de 3 a 6 oraciones.\n"
+        "Escribe en prosa, sin viñetas, sin markdown y sin dos puntos.\n\n"
+        f"Pregunta  {pregunta}\n\n"
+        f"Documento {nombre}\n{texto}"
+    )
     return llm.invoke(prompt).content.strip()
 
 
@@ -55,77 +67,107 @@ def responder_con_documentos(pregunta, fragmentos, historial="", modelo=OLLAMA_M
     # respondemos con los pedazos que encontro el rag y con la conversacion previa del chat
     if not fragmentos:
         return "No se encontró texto en el documento."
-    llm = ChatOllama(model=modelo, base_url=OLLAMA_BASE_URL, temperature=0.2, reasoning=False,
-                     num_ctx=OLLAMA_NUM_CTX, num_predict=1500)
-    prompt = f"""Eres analista senior de riesgos del portafolio de tarjetas de Banamex.
-Regla principal, todas las cifras van con dígitos copiadas tal cual del documento, por ejemplo 5.57% o $242.1 millones. Nunca escribas un número con letra.
-Las cantidades de dinero son pesos mexicanos, nunca digas dólares.
-Responde la pregunta usando solo lo que dicen los fragmentos de abajo, no inventes ni recalcules.
-Usa la conversación previa solo para entender de qué se está hablando.
-Si la respuesta no está en los fragmentos dilo.
-Cuando uses un dato di de qué documento o tabla sale.
-{estilo or "Responde en un solo párrafo de 3 a 6 oraciones. Escribe en prosa, sin viñetas, sin markdown y sin dos puntos."}
-
-Conversación previa
-{historial}
-
-Pregunta  {pregunta}
-
-Fragmentos de los documentos del chat
-{fragmentos}"""
+    llm = ChatOllama(
+        model=modelo,
+        base_url=OLLAMA_BASE_URL,
+        temperature=0.2,
+        reasoning=False,
+        num_ctx=OLLAMA_NUM_CTX,
+        num_predict=1500,
+    )
+    estilo_final = estilo or (
+        "Responde en un solo párrafo de 3 a 6 oraciones. "
+        "Escribe en prosa, sin viñetas, sin markdown y sin dos puntos."
+    )
+    prompt = (
+        "Eres analista senior de riesgos del portafolio de tarjetas de Banamex.\n"
+        "Regla principal: todas las cifras van con dígitos copiadas tal cual del documento "
+        "(ej. 5.57% o $242.1 millones). Nunca escribas un número con letra.\n"
+        "Las cantidades de dinero son pesos mexicanos, nunca digas dólares.\n"
+        "Responde usando solo lo que dicen los fragmentos de abajo, no inventes ni recalcules.\n"
+        "Usa la conversación previa solo para entender de qué se está hablando.\n"
+        "Si la respuesta no está en los fragmentos dilo.\n"
+        "Cuando uses un dato di de qué documento o tabla sale.\n"
+        f"{estilo_final}\n\n"
+        f"Conversación previa\n{historial}\n\n"
+        f"Pregunta  {pregunta}\n\n"
+        f"Fragmentos de los documentos del chat\n{fragmentos}"
+    )
     return llm.invoke(prompt).content.strip()
 
 
 def numeros_en(texto):
     import re
-    return {f"{float(n.replace(',', '').rstrip('.')):g}" for n in re.findall(r"\d[\d,]*\.?\d*", texto)}
+
+    return {
+        f"{float(n.replace(',', '').rstrip('.')):g}" for n in re.findall(r"\d[\d,]*\.?\d*", texto)
+    }
 
 
-def analizar_datos_grafica(titulo, datos_grafica, segmento, historial="", modelo=OLLAMA_MODEL, estilo=""):
-    # analizamos la grafica con sus datos en texto, sin captura ni modelo de vision, asi gasta muchos menos tokens
-    llm = ChatOllama(model=modelo, base_url=OLLAMA_BASE_URL, temperature=0.2, reasoning=False,
-                     num_ctx=OLLAMA_NUM_CTX, num_predict=900)
-    prompt = f"""Eres analista senior de riesgos del portafolio de tarjetas de Banamex.
-Analiza la gráfica {titulo} del segmento {segmento} usando solo los datos de abajo.
-Regla principal, todas las cifras van con dígitos copiadas tal cual de los datos. Nunca escribas un número con letra.
-Usa el símbolo % en lugar de la palabra por ciento y escribe los meses con dígitos, por ejemplo MOB 7. Si las series cruzan su límite en meses distintos, dilo por separado.
-No inventes ni recalcules cifras. Las cantidades de dinero son pesos mexicanos.
-Los valores de las series son porcentajes sobre el saldo y el eje x de las curvas son meses en libros (MOB).
-Explica qué muestra la gráfica, la tendencia, dónde está lo más alto y lo más bajo y si algo pasa los límites de apetito.
-Para el máximo, el mínimo y si una serie pasa su límite usa exactamente las líneas que empiezan con Hechos y Límite, no lo deduzcas tú.
-Si una serie está ARRIBA del límite dilo claramente como un riesgo, nunca digas que está dentro del apetito.
-{estilo or "Responde en un párrafo de 4 a 6 oraciones, en prosa, sin viñetas, sin markdown y sin dos puntos."}
-
-Conversación previa
-{historial or "ninguna"}
-
-Datos de la gráfica
-{datos_grafica}"""
+def analizar_datos_grafica(
+    titulo, datos_grafica, segmento, historial="", modelo=OLLAMA_MODEL, estilo=""
+):
+    # Analizamos la grafica con sus datos en texto (sin vision) para ahorrar tokens
+    llm = ChatOllama(
+        model=modelo,
+        base_url=OLLAMA_BASE_URL,
+        temperature=0.2,
+        reasoning=False,
+        num_ctx=OLLAMA_NUM_CTX,
+        num_predict=900,
+    )
+    estilo_final = estilo or (
+        "Responde en un párrafo de 4 a 6 oraciones, en prosa, "
+        "sin viñetas, sin markdown y sin dos puntos."
+    )
+    prompt = (
+        "Eres analista senior de riesgos del portafolio de tarjetas de Banamex.\n"
+        f"Analiza la gráfica {titulo} del segmento {segmento} usando solo los datos de abajo.\n"
+        "Regla principal: todas las cifras van con dígitos copiadas tal cual de los datos. "
+        "Nunca escribas un número con letra.\n"
+        "Usa el símbolo % en lugar de la palabra por ciento y escribe los meses con dígitos "
+        "(ej. MOB 7). Si las series cruzan su límite en meses distintos, dilo por separado.\n"
+        "No inventes ni recalcules cifras. Las cantidades de dinero son pesos mexicanos.\n"
+        "Los valores son porcentajes sobre el saldo y el eje x son meses en libros (MOB).\n"
+        "Explica qué muestra la gráfica, la tendencia, máximos, mínimos y si pasa los límites.\n"
+        "Para máximo, mínimo y cruces usa exactamente las líneas de Hechos y Límite.\n"
+        "Si una serie está ARRIBA del límite dilo claramente como riesgo.\n"
+        f"{estilo_final}\n\n"
+        f"Conversación previa\n{historial or 'ninguna'}\n\n"
+        f"Datos de la gráfica\n{datos_grafica}"
+    )
     # revisamos que no traiga cifras que no salen de los datos, igual que el guardrail
     validas = numeros_en(f"{datos_grafica} {MAX_NCL_RATE_PCT} {MAX_OVER30_RATE_PCT} 30 100")
     aviso = ""
     texto = ""
     for intento in range(2):
         texto = llm.invoke(prompt + aviso).content.strip()
-        malas = sorted(n for n in numeros_en(texto) if n not in validas and len(n.replace(".", "")) > 1)
+        malas = sorted(
+            n for n in numeros_en(texto) if n not in validas and len(n.replace(".", "")) > 1
+        )
         if not malas:
             return texto
         print("cifras que no salen de la grafica", malas)
-        aviso = "\nAntes usaste cifras que no están en los datos (" + ", ".join(malas) + "), no las uses."
+        aviso = (
+            "\nAntes usaste cifras que no están en los datos ("
+            + ", ".join(malas)
+            + "), no las uses."
+        )
     return texto
 
 
 def responder_conversacion(mensaje, historial="", modelo=OLLAMA_MODEL):
-    # cuando el usuario solo comenta o agradece contestamos breve, sin consultar el cubo ni dar cifras
-    llm = ChatOllama(model=modelo, base_url=OLLAMA_BASE_URL, temperature=0.3, reasoning=False, num_predict=80)
-    prompt = f"""Eres el copiloto de riesgos del portafolio de tarjetas de Banamex.
-El usuario solo hizo un comentario, no pidió datos. Contéstale en una oración, amable y natural, sin cifras.
-
-Conversación previa
-{historial or "ninguna"}
-
-Comentario del usuario
-{mensaje}"""
+    # Cuando el usuario solo comenta o agradece contestamos breve, sin consultar el cubo
+    llm = ChatOllama(
+        model=modelo, base_url=OLLAMA_BASE_URL, temperature=0.3, reasoning=False, num_predict=80
+    )
+    prompt = (
+        "Eres el copiloto de riesgos del portafolio de tarjetas de Banamex.\n"
+        "El usuario solo hizo un comentario, no pidió datos. "
+        "Contéstale en una oración, amable y natural, sin cifras.\n\n"
+        f"Conversación previa\n{historial or 'ninguna'}\n\n"
+        f"Comentario del usuario\n{mensaje}"
+    )
     return llm.invoke(prompt).content.strip()
 
 
@@ -135,31 +177,28 @@ class Intencion(BaseModel):
 
 
 def leer_intencion(mensaje, respuesta_anterior="", modelo=OLLAMA_MODEL):
-    # el modelo que escogio el usuario lee el mensaje y nos dice a donde va y que opina de la respuesta anterior
-    llm = ChatOllama(model=modelo, base_url=OLLAMA_BASE_URL, temperature=0.0, reasoning=False,
-                     num_predict=60)
-    prompt = f"""Clasifica el mensaje de un usuario que platica con un agente de riesgos de tarjetas de crédito.
-
-destino es a dónde va el mensaje.
-reporte si pide que se le arme un reporte o documento.
-grafica si pide que se le haga una gráfica nueva.
-grafica_en_pantalla si pregunta por la gráfica que ya está viendo en pantalla, por ejemplo qué significa o qué muestra.
-conversacion si solo es un comentario, agradecimiento o saludo y no pide ningún dato.
-agente para cualquier pregunta que necesite datos del portafolio.
-Si el usuario dice que no quiere un reporte o una gráfica, ese destino no aplica.
-
-opinion es lo que el mensaje dice de la respuesta anterior del agente.
-pide_mas_detalle si quiere que le explique más o no entendió.
-pide_menos si quiere algo más corto o directo.
-pide_tabla si quiere las cifras en una tabla.
-le_gusto si agradece o dice que la respuesta estuvo bien.
-nada si no opina de la respuesta anterior.
-
-Respuesta anterior del agente
-{respuesta_anterior[:800] or "ninguna"}
-
-Mensaje del usuario
-{mensaje}"""
+    # Clasifica el destino del mensaje y la opinion sobre la respuesta anterior
+    llm = ChatOllama(
+        model=modelo, base_url=OLLAMA_BASE_URL, temperature=0.0, reasoning=False, num_predict=60
+    )
+    prompt = (
+        "Clasifica el mensaje de un usuario con un agente de riesgos de tarjetas de crédito.\n\n"
+        "destino es a dónde va el mensaje:\n"
+        "reporte si pide que se le arme un reporte o documento.\n"
+        "grafica si pide que se le haga una gráfica nueva.\n"
+        "grafica_en_pantalla si pregunta por la gráfica que ya está viendo en pantalla.\n"
+        "conversacion si solo es un comentario, agradecimiento o saludo sin pedir datos.\n"
+        "agente para cualquier pregunta que necesite datos del portafolio.\n"
+        "Si el usuario dice que no quiere un reporte o una gráfica, ese destino no aplica.\n\n"
+        "opinion es lo que el mensaje dice de la respuesta anterior del agente:\n"
+        "pide_mas_detalle si quiere que le explique más o no entendió.\n"
+        "pide_menos si quiere algo más corto o directo.\n"
+        "pide_tabla si quiere las cifras en una tabla.\n"
+        "le_gusto si agradece o dice que la respuesta estuvo bien.\n"
+        "nada si no opina de la respuesta anterior.\n\n"
+        f"Respuesta anterior del agente\n{respuesta_anterior[:800] or 'ninguna'}\n\n"
+        f"Mensaje del usuario\n{mensaje}"
+    )
     try:
         return llm.with_structured_output(Intencion, method="json_schema").invoke(prompt)
     except Exception as exc:  # noqa: BLE001

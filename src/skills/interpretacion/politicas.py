@@ -86,9 +86,11 @@ def borrar_politica(nombre):
 def contenido_politica(nombre):
     nombre = Path(nombre).name
     archivo = POLICIES_DIR / nombre
-    # los markdown los mostramos tal cual, los pdf y word con las secciones que ya leimos al subirlos
+    # Markdown se muestra tal cual; PDF y Word desde las secciones ya indexadas al subirlos
     if archivo.suffix.lower() == ".md" and archivo.exists():
         return archivo.read_text(encoding="utf-8", errors="ignore")
     datos = _get_collection().get(where={"source": nombre})
-    piezas = sorted(zip(datos["metadatas"], datos["documents"]), key=lambda x: x[0].get("section_index", 0))
+    piezas = sorted(
+        zip(datos["metadatas"], datos["documents"]), key=lambda x: x[0].get("section_index", 0)
+    )
     return "\n\n".join(doc for _, doc in piezas)

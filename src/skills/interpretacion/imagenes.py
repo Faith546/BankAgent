@@ -5,10 +5,12 @@ import pymupdf
 
 from src.config import OLLAMA_BASE_URL, OLLAMA_VISION_MODEL
 
-prompt_vision = """Transcribe todo el texto que aparece en la imagen tal cual, con las cifras exactas como vienen.
-Si hay tablas pásalas fila por fila separando las columnas con  |  .
-Si hay gráficas di qué tipo son, qué mide cada eje y los valores que se alcancen a leer.
-No inventes datos que no se vean en la imagen. Responde en español."""
+prompt_vision = (
+    "Transcribe todo el texto que aparece en la imagen tal cual, con las cifras exactas.\n"
+    "Si hay tablas pásalas fila por fila separando las columnas con  |  .\n"
+    "Si hay gráficas di qué tipo son, qué mide cada eje y los valores que se alcancen a leer.\n"
+    "No inventes datos que no se vean en la imagen. Responde en español."
+)
 
 
 def leer_imagen(archivo):

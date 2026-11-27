@@ -30,8 +30,8 @@ _ALLOWED_CONTEXT_NUMBERS = {
     2026.0,
 }
 
-# la primera opcion es solo para numeros con comas de miles (1,234,567.89) y exige al menos una coma,
-# asi los numeros largos sin comas (85528) ya no se parten en pedazos y caen completos en la segunda
+# La primera opcion exige coma de miles (1,234,567.89) para que numeros largos sin comas
+# (ej. 85528) no se partan en pedazos y entren completos en la segunda rama.
 _NUMBER_REGEX = re.compile(r"(?<![A-Za-z0-9_.])(-?\d{1,3}(?:,\d{3})+(?:\.\d+)?|-?\d+(?:\.\d+)?)")
 
 

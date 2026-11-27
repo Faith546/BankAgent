@@ -10,6 +10,8 @@ Asistente agéntico **100% local** para analizar cohortes (`VINTAGE` / `MOB`) y 
 
 Antes de hacer cambios o pedirle código a una IA, revisa estas 4 referencias clave:
 
+* **Manual de usuario (para analistas y demos):** [`docs/guias/MANUAL_USUARIO.md`](docs/guias/MANUAL_USUARIO.md)
+* **Convenciones oficiales y Definition of Done (PRs):** [`docs/guias/CONVENCIONES.md`](docs/guias/CONVENCIONES.md)
 * **Reglas de colaboración y dónde dejar actualizaciones/contexto (IA + Humanos):** [`docs/guias/COLABORACION_Y_CONTEXTO_IA.md`](docs/guias/COLABORACION_Y_CONTEXTO_IA.md)
 * **Buenas prácticas (PEP 8, contratos, seguridad sandbox y pruebas):** [`docs/guias/BUENAS_PRACTICAS.md`](docs/guias/BUENAS_PRACTICAS.md)
 * **Carpeta de contexto vivo (ADRs, handoffs y benchmarks):** [`docs/contexto/`](docs/contexto/README.md)

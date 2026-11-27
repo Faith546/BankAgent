@@ -65,7 +65,9 @@ def ingest_policies(policies_dir: Path | None = None) -> int:
     # usamos la misma funcion que la pestaña de politicas para que todos queden indexados igual
     for archivo in sorted(target_dir.iterdir()):
         if archivo.suffix.lower() in politicas.extensiones:
-            total += politicas.indexar(archivo.name, politicas.texto_de(archivo.name, archivo.read_bytes()))
+            total += politicas.indexar(
+                archivo.name, politicas.texto_de(archivo.name, archivo.read_bytes())
+            )
     return total
 
 

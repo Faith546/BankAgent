@@ -9,7 +9,7 @@ from langchain_ollama import ChatOllama
 from src.config import OLLAMA_BASE_URL, OLLAMA_MODEL
 
 carpeta = Path(__file__).resolve().parent / "chatsPasados"
-# cuando lo que no se ha resumido pasa de este tamaño se comprime, dejando los ultimos mensajes tal cual
+# Cuando lo no resumido pasa de este tamaño se comprime, dejando los ultimos tal cual
 umbral_comprimir = 3000
 recientes = 4
 
@@ -48,7 +48,9 @@ def guardar_chat(chat):
     # el titulo sale de la primera pregunta del usuario
     if chat["titulo"] == "Chat nuevo" and chat["mensajes"]:
         chat["titulo"] = chat["mensajes"][0][1][:40]
-    ruta_chat(chat["id"]).write_text(json.dumps(chat, ensure_ascii=False, indent=2), encoding="utf-8")
+    ruta_chat(chat["id"]).write_text(
+        json.dumps(chat, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
 
 
 def cargar_chat(chat_id):
@@ -75,7 +77,7 @@ def ultimos_mensajes(chat, limite=6000):
     resumen = guardado["resumen"]
     lineas = []
     total = len(resumen)
-    for m in reversed(chat["mensajes"][guardado["comprimidos"]:]):
+    for m in reversed(chat["mensajes"][guardado["comprimidos"] :]):
         quien = "Usuario" if m[0] == "user" else "Asistente"
         linea = f"{quien}  {m[1]}"
         if total + len(linea) > limite:
@@ -83,19 +85,31 @@ def ultimos_mensajes(chat, limite=6000):
         lineas.insert(0, linea)
         total += len(linea)
     if resumen:
-        return "Resumen de la conversación anterior\n" + resumen + "\n\nMensajes recientes\n" + "\n".join(lineas)
+        return (
+            "Resumen de la conversación anterior\n"
+            + resumen
+            + "\n\nMensajes recientes\n"
+            + "\n".join(lineas)
+        )
     return "\n".join(lineas)
 
 
 def nombrar_chat(chat):
     # el agente le pone un nombre clave al chat con la primera pregunta
     pregunta = chat["mensajes"][0][1]
-    prompt = f"""Ponle un nombre clave de 2 a 4 palabras a esta conversación sobre el portafolio de tarjetas.
-Responde solo con el nombre, sin comillas ni puntos.
-
-Pregunta  {pregunta}"""
+    prompt = (
+        "Ponle un nombre clave de 2 a 4 palabras a esta conversación sobre el portafolio.\n"
+        "Responde solo con el nombre, sin comillas ni puntos.\n\n"
+        f"Pregunta  {pregunta}"
+    )
     try:
-        llm = ChatOllama(model=OLLAMA_MODEL, base_url=OLLAMA_BASE_URL, temperature=0.2, reasoning=False, num_predict=20)
+        llm = ChatOllama(
+            model=OLLAMA_MODEL,
+            base_url=OLLAMA_BASE_URL,
+            temperature=0.2,
+            reasoning=False,
+            num_predict=20,
+        )
         titulo = llm.invoke(prompt).content.strip().strip('"').strip(".")[:40]
     except Exception as e:
         print("no se pudo nombrar el chat", e)
@@ -121,7 +135,9 @@ Pregunta  {pregunta}"""
 
 
 def numeros(texto):
-    return {f"{float(n.replace(',', '').rstrip('.')):g}" for n in re.findall(r"\d[\d,]*\.?\d*", texto)}
+    return {
+        f"{float(n.replace(',', '').rstrip('.')):g}" for n in re.findall(r"\d[\d,]*\.?\d*", texto)
+    }
 
 
 def comprimir_chat(chat_id):
@@ -130,37 +146,49 @@ def comprimir_chat(chat_id):
         return None
     mensajes = cargar_chat(chat_id)["mensajes"]
     guardado = leer_resumen(chat_id)
-    pendientes = mensajes[guardado["comprimidos"]:]
+    pendientes = mensajes[guardado["comprimidos"] :]
     if sum(len(m[1]) for m in pendientes) < umbral_comprimir or len(pendientes) <= recientes:
         return None
 
     # resumimos todo lo pendiente menos los ultimos mensajes, esos se quedan tal cual
     hasta = len(mensajes) - recientes
-    viejos = mensajes[guardado["comprimidos"]:hasta]
-    texto_viejo = "\n".join(f"{'Usuario' if m[0] == 'user' else 'Asistente'}  {m[1]}" for m in viejos)
-    prompt = f"""Resume esta conversación sobre el portafolio de tarjetas de Banamex para que el analista no pierda el hilo.
-Usa exactamente estos cinco campos, uno por renglón, y si un campo no tiene nada pon ninguno.
-Segmentos y filtros  canales, productos, vintages, scores o MOB que se están analizando
-Documentos  nombres de los documentos que se subieron y de qué tratan
-Reportes y gráficas  qué reportes o gráficas se generaron y de qué
-Cifras clave  las cifras importantes copiadas tal cual con dígitos, cada una con a qué se refiere
-Conclusiones  decisiones, recomendaciones o dudas pendientes
-No inventes nada que no esté abajo. Máximo 120 palabras.
-
-Resumen anterior
-{guardado["resumen"] or "ninguno"}
-
-Mensajes nuevos
+    viejos = mensajes[guardado["comprimidos"] : hasta]
+    texto_viejo = "\n".join(
+        f"{'Usuario' if m[0] == 'user' else 'Asistente'}  {m[1]}" for m in viejos
+    )
+    prompt = (
+        (
+            "Resume esta conversación sobre el portafolio de tarjetas de Banamex para que el\n"
+            "analista no pierda el hilo. Usa exactamente estos cinco campos, uno por renglón,\n"
+            "y si un campo no tiene nada pon ninguno.\n"
+            "Segmentos y filtros  canales, productos, vintages, scores o MOB analizados\n"
+            "Documentos  nombres de los documentos que se subieron y de qué tratan\n"
+            "Reportes y gráficas  qué reportes o gráficas se generaron y de qué\n"
+            "Cifras clave  cifras importantes copiadas tal cual con dígitos y a qué se refieren\n"
+            "Conclusiones  decisiones, recomendaciones o dudas pendientes\n"
+            "No inventes nada que no esté abajo. Máximo 120 palabras.\n\n"
+            f"Resumen anterior\n{guardado['resumen'] or 'ninguno'}\n\n"
+        )
+        + f"""Mensajes nuevos
 {texto_viejo}"""
+    )
 
     # revisamos que el resumen no traiga cifras que no salen de la conversacion
     validas = numeros(guardado["resumen"] + " " + texto_viejo)
-    llm = ChatOllama(model=OLLAMA_MODEL, base_url=OLLAMA_BASE_URL, temperature=0.0, reasoning=False, num_predict=600)
+    llm = ChatOllama(
+        model=OLLAMA_MODEL,
+        base_url=OLLAMA_BASE_URL,
+        temperature=0.0,
+        reasoning=False,
+        num_predict=600,
+    )
     aviso = ""
     for intento in range(2):
         resumen = llm.invoke(prompt + aviso).content.strip()
         # los numeros de un solo digito como MOB 6 no se revisan, igual que en el reporte
-        malas = sorted(n for n in numeros(resumen) if n not in validas and len(n.replace(".", "")) > 1)
+        malas = sorted(
+            n for n in numeros(resumen) if n not in validas and len(n.replace(".", "")) > 1
+        )
         if not malas:
             datos = {"resumen": resumen, "comprimidos": hasta}
             ruta = ruta_resumen(chat_id)
@@ -169,7 +197,11 @@ Mensajes nuevos
             temporal.replace(ruta)
             print("chat comprimido", chat_id, hasta, "mensajes")
             return datos
-        aviso = "\nAntes pusiste cifras que no están en la conversación (" + ", ".join(malas) + "), no las uses."
+        aviso = (
+            "\nAntes pusiste cifras que no están en la conversación ("
+            + ", ".join(malas)
+            + "), no las uses."
+        )
     # si sigue inventando no guardamos nada y se intenta en la siguiente respuesta
     print("no se pudo comprimir sin inventar cifras", chat_id)
     return None

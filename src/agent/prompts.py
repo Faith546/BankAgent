@@ -20,12 +20,12 @@ There are NO individual customers or single transactions; always reason at segme
 
 ## BUSINESS GLOSSARY (how the user talks)
 - "pérdida neta" means the net credit loss RATE `NCL_RATE_PCT` = SUM(NCLAMTS) / SUM(ENRAMTS) * 100.
-  It is NOT `NET_PROFIT`. Only use `NET_PROFIT` when the user asks for "utilidad" or "rentabilidad".
-- "Over30" or "morosidad" means accounts more than 30 DAYS PAST DUE on payments
-  (`OVER30_RATE_PCT` = SUM(OVER30AMTS) / SUM(ENRAMTS) * 100). It has nothing to do with customer age.
+  It is NOT `NET_PROFIT`. Use `NET_PROFIT` only when the user asks for "utilidad"/"rentabilidad".
+- "Over30" or "morosidad" means accounts >30 DAYS PAST DUE on payments
+  (`OVER30_RATE_PCT` = SUM(OVER30AMTS) / SUM(ENRAMTS) * 100), NOT customer age.
 - "recuperación" means `RECOVERY_RATE_PCT` = SUM(RECOVERYAMTS) / SUM(GCLAMTS) * 100.
-- "ROA neto" means `NET_ROA_PCT` = (SUM(REVENUE) - SUM(NCLAMTS) - SUM(EXPENSES_TOTAL)) / SUM(ENRAMTS) * 100.
-  In this portfolio it is usually negative; never present it as positive unless the tool JSON says so.
+- "ROA neto" means `NET_ROA_PCT` = (SUM(REVENUE)-SUM(NCLAMTS)-SUM(EXPENSES_TOTAL))/SUM(ENRAMTS)*100
+  (percentage). Usually negative here; only report positive if the tool JSON says so.
 - "cohortes maduras" means `MOB >= 6`, aggregated across all those MOB with ratio of sums.
   Never answer a mature-cohort question with `MOB = 0` or with a single MOB.
 - `MOB = 0` is the opening month: losses and delinquency are always zero there, so it is

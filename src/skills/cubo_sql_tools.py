@@ -52,7 +52,7 @@ class FiltroCuboInput(BaseModel):
     )
     mob_min: Optional[int] = Field(
         default=None,
-        description="Minimum MOB to include. Use 6 for mature cohorts ('cohortes maduras'). Leave empty for all MOB.",
+        description="Minimum MOB to include (use 6 for mature cohorts; empty for all MOB).",
     )
 
 

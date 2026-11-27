@@ -15,12 +15,20 @@ alpha = 0.1
 # cada accion es un estilo de respuesta y el texto es la instruccion que le pegamos a la pregunta
 acciones = {
     "corta": "Responde en máximo 3 oraciones con la cifra principal.",
-    "detallada": "Responde explicando qué significa cada cifra y por qué importa para el riesgo del portafolio. No hagas cuentas ni comparaciones que no vengan en los datos y no uses rangos o promedios que no salgan de las herramientas.",
+    "detallada": (
+        "Responde explicando qué significa cada cifra y por qué importa para el riesgo del "
+        "portafolio. No hagas cuentas ni comparaciones que no vengan en los datos y no uses "
+        "rangos o promedios que no salgan de las herramientas."
+    ),
     "con_tabla": "Responde corto y pon las cifras en una tabla.",
 }
 sin_respuesta = "el agente no alcanzo a escribir la respuesta"
-# cuando el usuario pide un estilo con sus palabras, este es el estilo que le damos en esa respuesta
-pedido_a_estilo = {"pide_mas_detalle": "detallada", "pide_menos": "corta", "pide_tabla": "con_tabla"}
+# Cuando el usuario pide un estilo explícito, aplicamos este mapeo en esa respuesta
+pedido_a_estilo = {
+    "pide_mas_detalle": "detallada",
+    "pide_menos": "corta",
+    "pide_tabla": "con_tabla",
+}
 
 
 def leer_json(ruta, vacio):
@@ -39,6 +47,7 @@ def escribir_json(ruta, datos):
 
 # paso 1 registramos lo que pasa en el chat y sacamos recompensas automaticas
 
+
 def recompensa_automatica(respuesta):
     r = clasificador.normalizar(respuesta)
     # si no hubo respuesta el estilo no le sirvio al usuario
@@ -55,11 +64,13 @@ def registrar_evento(chat_id, texto, tipo, respuesta, accion, opinion="nada"):
     anteriores = [e for e in eventos if e["chat_id"] == chat_id]
     if anteriores:
         ultimo = anteriores[-1]
-        parecido = SequenceMatcher(None, clasificador.normalizar(ultimo["texto"]), clasificador.normalizar(texto)).ratio()
+        parecido = SequenceMatcher(
+            None, clasificador.normalizar(ultimo["texto"]), clasificador.normalizar(texto)
+        ).ratio()
         # si repite casi la misma pregunta es que la respuesta anterior no le sirvio
         if parecido > 0.8:
             ultimo["recompensa"] = -1
-        # la opinion la saca el modelo rapido en intencion.py, aqui solo decidimos el premio o castigo
+        # La opinion viene del modelo rapido; aqui solo asignamos premio o castigo
         # si pide mas explicacion la respuesta corta no le alcanzo
         elif opinion == "pide_mas_detalle" and ultimo["accion"] == "corta":
             ultimo["recompensa"] = -1
@@ -73,17 +84,21 @@ def registrar_evento(chat_id, texto, tipo, respuesta, accion, opinion="nada"):
         elif opinion == "le_gusto":
             ultimo["recompensa"] = 1
         # si sigue preguntando del mismo tema la respuesta anterior si le sirvio
-        elif ultimo["recompensa"] == 0 and clasificador.entidades(ultimo["texto"]) & clasificador.entidades(texto):
+        elif ultimo["recompensa"] == 0 and clasificador.entidades(
+            ultimo["texto"]
+        ) & clasificador.entidades(texto):
             ultimo["recompensa"] = 0.5
-    eventos.append({
-        "chat_id": chat_id,
-        "fecha": datetime.now().strftime("%Y%m%d_%H%M%S"),
-        "texto": texto,
-        "tipo": tipo,
-        "respuesta": respuesta,
-        "accion": accion,
-        "recompensa": recompensa_automatica(respuesta),
-    })
+    eventos.append(
+        {
+            "chat_id": chat_id,
+            "fecha": datetime.now().strftime("%Y%m%d_%H%M%S"),
+            "texto": texto,
+            "tipo": tipo,
+            "respuesta": respuesta,
+            "accion": accion,
+            "recompensa": recompensa_automatica(respuesta),
+        }
+    )
     escribir_json(ruta_eventos, eventos)
 
 
@@ -98,6 +113,7 @@ def dar_recompensa(chat_id, recompensa):
 
 
 # paso 2 policy learning con gradient bandit
+
 
 def softmax(preferencias):
     # pi(a) = e^H(a) / suma de e^H(b)
@@ -124,7 +140,9 @@ def actualizar_politica(utiles):
     for e in utiles:
         if e.get("accion") not in acciones:
             continue
-        tabla = politica.setdefault(e["tipo"], {"H": {a: 0.0 for a in acciones}, "promedio": 0.0, "n": 0})
+        tabla = politica.setdefault(
+            e["tipo"], {"H": {a: 0.0 for a in acciones}, "promedio": 0.0, "n": 0}
+        )
         r = e["recompensa"]
         pi = softmax(tabla["H"])
         for a in acciones:
@@ -143,6 +161,7 @@ def actualizar_politica(utiles):
 
 
 # paso 3 endpoint de limpieza, limpia y aprende de un jalon
+
 
 def limpieza():
     eventos = leer_json(ruta_eventos, [])
