@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<style>
+  /* barra de arriba con los botones, se queda fija al bajar */
+  #barra { position: sticky; top: 0; z-index: 10; display: flex; gap: 8px; align-items: center;
+           background: #F4F6F7; border-bottom: 1px solid #D5DBDE; padding: 8px 12px; font-family: Arial, sans-serif; }
+  #barra button { border: 1px solid #0E3A47; border-radius: 6px; padding: 6px 14px; font-size: 13px; cursor: pointer;
+                  background: #fff; color: #0E3A47; }
+  #barra button.principal { background: #0E3A47; color: #fff; }
+  #barra button:disabled { opacity: 0.45; cursor: default; }
+  #estado { font-size: 12px; color: #5F6B70; margin-left: 6px; }
+  /* los textos que se pueden editar se marcan al pasar el mouse */
+  [data-campo] { border-radius: 3px; outline: none; }
+  [data-campo]:hover { background: #FFF7E0; }
+  [data-campo]:focus { background: #FFF1C2; box-shadow: 0 0 0 1px #E0B84C; }
+  [data-campo].cambiado { box-shadow: inset 3px 0 0 #E4002B; }
+</style>
+</head>
+<body style="margin:0; background:#fff;">
+<div id="barra">
+  <button id="guardar" class="principal" disabled>Guardar cambios</button>
+  <button id="descartar" disabled>Descartar</button>
+  <span id="estado">Da clic en cualquier texto del reporte para editarlo</span>
+</div>
+<div id="doc"></div>
+
+<script>
+  // protocolo de componentes de streamlit escrito a mano para no necesitar instalar nada
+  function avisar(tipo, datos) {
+    window.parent.postMessage(Object.assign({ isStreamlitMessage: true, type: tipo }, datos || {}), "*");
+  }
+  function ajustarAltura() {
+    avisar("streamlit:setFrameHeight", { height: document.documentElement.scrollHeight });
+  }
+
+  let htmlActual = null;
+  let originales = {};
+  const guardar = document.getElementById("guardar");
+  const descartar = document.getElementById("descartar");
+  const estado = document.getElementById("estado");
+
+  function cambiados() {
+    const cambios = {};
+    document.querySelectorAll("[data-campo]").forEach(function (el) {
+      const texto = el.innerText.replace(/\s+/g, " ").trim();
+      if (texto !== originales[el.dataset.campo]) { cambios[el.dataset.campo] = texto; }
+    });
+    return cambios;
+  }
+
+  function revisar() {
+    const total = Object.keys(cambiados()).length;
+    document.querySelectorAll("[data-campo]").forEach(function (el) {
+      const texto = el.innerText.replace(/\s+/g, " ").trim();
+      el.classList.toggle("cambiado", texto !== originales[el.dataset.campo]);
+    });
+    guardar.disabled = total === 0;
+    descartar.disabled = total === 0;
+    estado.textContent = total === 0 ? "Da clic en cualquier texto del reporte para editarlo"
+                                     : total + " cambio(s) sin guardar";
+  }
+
+  function pintar(html) {
+    // el reporte viene como html completo, separamos su estilo y su contenido
+    const pagina = new DOMParser().parseFromString(html, "text/html");
+    let estilo = document.getElementById("estilo-reporte");
+    if (!estilo) { estilo = document.createElement("style"); estilo.id = "estilo-reporte"; document.head.appendChild(estilo); }
+    estilo.textContent = Array.from(pagina.querySelectorAll("style")).map(function (s) { return s.textContent; }).join("\n");
+    document.getElementById("doc").innerHTML = pagina.body.innerHTML;
+
+    originales = {};
+    document.querySelectorAll("[data-campo]").forEach(function (el) {
+      originales[el.dataset.campo] = el.innerText.replace(/\s+/g, " ").trim();
+      el.contentEditable = "true";
+      el.addEventListener("input", revisar);
+      // enter no crea renglones nuevos, cada campo es un solo parrafo
+      el.addEventListener("keydown", function (ev) { if (ev.key === "Enter") { ev.preventDefault(); } });
+      // al pegar solo entra texto, sin formato
+      el.addEventListener("paste", function (ev) {
+        ev.preventDefault();
+        const texto = (ev.clipboardData || window.clipboardData).getData("text");
+        document.execCommand("insertText", false, texto.replace(/\s+/g, " "));
+      });
+    });
+    revisar();
+    setTimeout(ajustarAltura, 50);
+  }
+
+  guardar.addEventListener("click", function () {
+    const cambios = cambiados();
+    if (Object.keys(cambios).length === 0) { return; }
+    guardar.disabled = true;
+    descartar.disabled = true;
+    estado.textContent = "Guardando y volviendo a armar el Word y el PDF...";
+    // el nonce hace que cada guardado sea distinto aunque los cambios se repitan
+    avisar("streamlit:setComponentValue", { value: { cambios: cambios, nonce: Date.now() }, dataType: "json" });
+  });
+
+  descartar.addEventListener("click", function () { pintar(htmlActual); });
+
+  window.addEventListener("message", function (ev) {
+    if (!ev.data || ev.data.type !== "streamlit:render") { return; }
+    const html = ev.data.args.html;
+    // solo volvemos a pintar si el reporte cambio, asi no se pierde lo que el usuario esta escribiendo
+    if (html !== htmlActual) {
+      htmlActual = html;
+      pintar(html);
+      if (ev.data.args.guardado) { estado.textContent = "Cambios guardados"; }
+    }
+  });
+
+  new ResizeObserver(ajustarAltura).observe(document.body);
+  avisar("streamlit:componentReady", { apiVersion: 1 });
+</script>
+</body>
+</html>

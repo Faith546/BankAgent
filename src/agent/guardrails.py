@@ -30,7 +30,9 @@ _ALLOWED_CONTEXT_NUMBERS = {
     2026.0,
 }
 
-_NUMBER_REGEX = re.compile(r"(?<![A-Za-z0-9_])(-?\d{1,3}(?:,\d{3})*(?:\.\d+)?|-?\d+(?:\.\d+)?)")
+# la primera opcion es solo para numeros con comas de miles (1,234,567.89) y exige al menos una coma,
+# asi los numeros largos sin comas (85528) ya no se parten en pedazos y caen completos en la segunda
+_NUMBER_REGEX = re.compile(r"(?<![A-Za-z0-9_.])(-?\d{1,3}(?:,\d{3})+(?:\.\d+)?|-?\d+(?:\.\d+)?)")
 
 
 def extract_numbers_from_evidence(evidence_items: list[Any]) -> set[float]:
@@ -77,8 +79,12 @@ def verify_response_numbers(
     if not evidence_items:
         return True, []
 
+    # los modelos a veces escriben el signo menos como guion largo (–, — o −), lo pasamos a -
+    # para que -5.78 no se lea como 5.78 positivo
+    sanitized = re.sub(r"[\u2012\u2013\u2014\u2212]", "-", response_text)
+
     # Ignorar rangos de edad/score conocidos como '01|', '25-30', '130-140', '202401'
-    sanitized = re.sub(r"\b\d{3}-\d{3}\b", " ", response_text)
+    sanitized = re.sub(r"\b\d{3}-\d{3}\b", " ", sanitized)
     sanitized = re.sub(r"\b202[4-6]\d{2}\b", " ", sanitized)
     sanitized = re.sub(r"\b0[1-3]\|\s*Young[^,\n]*", " ", sanitized)
     sanitized = re.sub(r"\bCASO-\d{4}-\d{4}\b", " ", sanitized)

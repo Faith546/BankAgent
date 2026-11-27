@@ -1,0 +1,34 @@
+[
+  {
+    "resumen_cubo": {
+      "sql_ejecutado": "obtener_resumen_portafolio  WHERE CHANNEL = ? AND AGE_TAG = ? AND SCORE_TAG = ?  parametros ['Others', '02| Young 25-30', '<130']",
+      "filtros": {
+        "channel": "Others",
+        "age_tag": "02| Young 25-30",
+        "score_tag": "<130",
+        "product": null,
+        "vintage": null,
+        "mob_min": null
+      },
+      "cohortes_unicas": 27,
+      "cuentas_iniciales_mob0": 402,
+      "lineas_credito_iniciales_mob0": 14661796,
+      "filas_cubo": 515,
+      "min_mob": 0,
+      "max_mob": 32,
+      "saldo_promedio_enr": 136512.02,
+      "saldo_acumulado_enr": 70303692.04,
+      "ingresos_acumulados": 5407574.85,
+      "perdida_bruta_gcl": 43061794.94,
+      "recuperacion_cobranza": 13680852.89,
+      "perdida_neta_ncl": 29380942.05,
+      "gastos_totales": 357307.59,
+      "utilidad_neta": -24330674.79,
+      "over30_rate_pct": 51.56,
+      "ncl_rate_pct": 41.79,
+      "recovery_rate_pct": 31.77,
+      "yield_rate_pct": 7.69,
+      "net_roa_pct": -34.61
+    }
+  }
+]

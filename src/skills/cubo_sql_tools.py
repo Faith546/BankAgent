@@ -50,6 +50,10 @@ class FiltroCuboInput(BaseModel):
         default=None,
         description="Booking month in YYYYMM integer format (202401 to 202609).",
     )
+    mob_min: Optional[int] = Field(
+        default=None,
+        description="Minimum MOB to include. Use 6 for mature cohorts ('cohortes maduras'). Leave empty for all MOB.",
+    )
 
 
 class SqlSelectInput(BaseModel):
@@ -111,6 +115,7 @@ def _build_where_clause(
     score_tag: Optional[str] = None,
     product: Optional[str] = None,
     vintage: Optional[int] = None,
+    mob_min: Optional[int] = None,
 ) -> tuple[str, list[Any]]:
     """Builds parameterized WHERE clause and argument list."""
     clauses: list[str] = []
@@ -126,6 +131,10 @@ def _build_where_clause(
         if val is not None and str(val).strip() != "":
             clauses.append(f"{col} = ?")
             params.append(val.strip() if isinstance(val, str) else val)
+    # filtro de madurez, por ejemplo MOB >= 6 para cohortes maduras
+    if mob_min is not None:
+        clauses.append("MOB >= ?")
+        params.append(int(mob_min))
 
     where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     return where_sql, params
@@ -171,14 +180,18 @@ def obtener_resumen_portafolio(
     score_tag: Optional[str] = None,
     product: Optional[str] = None,
     vintage: Optional[int] = None,
+    mob_min: Optional[int] = None,
 ) -> str:
-    """Compute aggregated KPIs (MOB 0 accounts, NCL%, Over30%, net profit, ROA%) from DuckDB."""
+    """Compute aggregated KPIs (MOB 0 accounts, NCL%, Over30%, net profit, ROA%) from DuckDB.
+    Pass only the filters the user asked for. Use mob_min=6 for mature cohorts."""
     err = validate_cube_filters(channel, age_tag, score_tag, product, vintage)
     if err is not None:
         return json.dumps(err, ensure_ascii=False)
 
-    where_sql, params = _build_where_clause(channel, age_tag, score_tag, product, vintage)
-    mob0_where = f"{where_sql} AND MOB = 0" if where_sql else "WHERE MOB = 0"
+    # las cuentas iniciales siempre salen de MOB 0, por eso ese filtro va sin mob_min
+    where0_sql, params0 = _build_where_clause(channel, age_tag, score_tag, product, vintage)
+    mob0_where = f"{where0_sql} AND MOB = 0" if where0_sql else "WHERE MOB = 0"
+    where_sql, params = _build_where_clause(channel, age_tag, score_tag, product, vintage, mob_min)
 
     con = duckdb.connect(str(DUCKDB_PATH), read_only=True)
     try:
@@ -191,7 +204,7 @@ def obtener_resumen_portafolio(
             FROM v_cubo_metricas
             {mob0_where}
             """,
-            params,
+            params0,
         ).fetchone()
 
         agg_row = con.execute(
@@ -234,6 +247,7 @@ def obtener_resumen_portafolio(
                     "score_tag": score_tag,
                     "product": product,
                     "vintage": vintage,
+                    "mob_min": mob_min,
                 },
             },
             ensure_ascii=False,
@@ -241,12 +255,17 @@ def obtener_resumen_portafolio(
 
     result = _round_row(
         {
+            # dejamos rastro de que filtros uso el agente para verlo en la pestaña de auditoria
+            "sql_ejecutado": (
+                f"obtener_resumen_portafolio  {where_sql or 'sin filtros'}  parametros {params}"
+            ),
             "filtros": {
                 "channel": channel,
                 "age_tag": age_tag,
                 "score_tag": score_tag,
                 "product": product,
                 "vintage": vintage,
+                "mob_min": mob_min,
             },
             "cohortes_unicas": init_row[0],
             "cuentas_iniciales_mob0": init_row[1],
@@ -279,13 +298,14 @@ def obtener_curva_maduracion(
     score_tag: Optional[str] = None,
     product: Optional[str] = None,
     vintage: Optional[int] = None,
+    mob_min: Optional[int] = None,
 ) -> str:
     """Return MOB (0..32) maturation series with weighted Over30%, NCL%, Yield%, and Net ROA%."""
     err = validate_cube_filters(channel, age_tag, score_tag, product, vintage)
     if err is not None:
         return json.dumps(err, ensure_ascii=False)
 
-    where_sql, params = _build_where_clause(channel, age_tag, score_tag, product, vintage)
+    where_sql, params = _build_where_clause(channel, age_tag, score_tag, product, vintage, mob_min)
 
     con = duckdb.connect(str(DUCKDB_PATH), read_only=True)
     try:
