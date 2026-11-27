@@ -1,12 +1,12 @@
 # Plan de Tareas — MVP Asistente Agéntico de Portafolio (Banamex)
 
-Este tablero sigue estrictamente el plan iterativo de [`docs/MVP_CONTEXT_AGENT_BANAMEX.md`](MVP_CONTEXT_AGENT_BANAMEX.md). Se completa **una etapa a la vez**, validando en terminal antes de avanzar.
+Este tablero sigue estrictamente el plan iterativo de [`MVP_CONTEXT_AGENT_BANAMEX.md`](../arquitectura/MVP_CONTEXT_AGENT_BANAMEX.md). Se completa **una etapa a la vez**, validando en terminal antes de avanzar.
 
 ---
 
 ## Paso 0: Prerrequisitos y Entorno (Completar antes de programar)
-- [x] **T0.1** Generar [`README.md`](../README.md) con prerrequisitos (`Ollama`, `uv`, GPU `nvidia-smi`, rutas de datos y explicación de LangChain/LangGraph vs. MCP).
-- [x] **T0.2** Crear [`pyproject.toml`](../pyproject.toml) con las dependencias oficiales del MVP.
+- [x] **T0.1** Generar [`README.md`](../../README.md) con prerrequisitos (`Ollama`, `uv`, GPU `nvidia-smi`, rutas de datos y explicación de LangChain/LangGraph vs. MCP).
+- [x] **T0.2** Crear [`pyproject.toml`](../../pyproject.toml) con las dependencias oficiales del MVP.
 - [x] **T0.3 (Manual - Usuario)** Instalar Ollama, descargar modelo LLM (`qwen3.5:9b` o `qwen2.5:7b-instruct-q4_K_M`) y embeddings (`nomic-embed-text`).
 - [x] **T0.4 (Manual - Usuario)** Instalar `uv`, ejecutar `uv venv --python 3.11` y `uv sync`.
 - [x] **T0.5 (Manual - Usuario)** Colocar el CSV y el diccionario `.xlsx` en `data/raw/` (y confirmar si se usará `base_cards_sintetica.csv` o `base_cards_sintetica_mini.csv`).
@@ -48,7 +48,8 @@ Este tablero sigue estrictamente el plan iterativo de [`docs/MVP_CONTEXT_AGENT_B
 
 ---
 
-## Etapa 4 (Futura / Post-MVP): Módulo de Machine Learning
-*Nota: Se implementará únicamente después de validar las Etapas 1, 2 y 3.*
-- [ ] **T4.1** Crear `src/ml/anomaly_detector.py` (`IsolationForest` normalizado por `MOB`, `K-Means`, `DecisionTreeClassifier`).
+## Etapa 4 (Futura / Post-MVP): Evolución del Equipo y Machine Learning
+* **Backlog activo de 13 Issues (Jose, Fab, Diego + Equipo):** Ver detalle completo, responsables, reglas de sandbox bancario y criterios de aceptación en [`docs/ISSUES.md`](ISSUES.md).
+* **Módulo de Machine Learning (fase posterior):**
+  - [ ] **T4.1** Crear `src/ml/anomaly_detector.py` (`IsolationForest` normalizado por `MOB`, `K-Means`, `DecisionTreeClassifier`).
 

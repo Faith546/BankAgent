@@ -1,111 +1,101 @@
-# BankAgent — Asistente Agéntico de Análisis de Portafolio (Banamex MVP)
+# BankAgent — Asistente Agéntico de Análisis de Portafolio (Banamex)
 
-Asistente agéntico **100% local** para el análisis de cohortes (`VINTAGE` / `MOB`) y segmentos de tarjetas de crédito. Combina consultas analíticas en **DuckDB**, razonamiento con **Ollama** local, búsqueda normativa en **ChromaDB (RAG)**, gráficas ejecutivas en **Plotly/Kaleido**, generación de reportes (`.docx` / `.pptx`), trazabilidad en **Git** (*Audit-as-Code*) e interfaz híbrida de 3 paneles en **Streamlit** con supervisión humana (*Human-in-the-Loop*).
+> **Punto de entrada central del repositorio.** Aquí encuentras cómo ejecutar el proyecto, cómo está organizado, qué consideraciones técnicas debes respetar y dónde consultar/dejar contexto si trabajas en equipo o con IA.
 
----
-
-## 1. Arquitectura rápida (¿Se necesita MCP?)
-
-**No necesitas instalar ni configurar ningún servidor MCP para usar este proyecto.**
-
-* **DuckDB (`data/duckdb/`):** Almacena el cubo numérico (`>1M` filas) en modo solo lectura para el agente. Nunca se vectoriza el CSV.
-* **ChromaDB (`data/chromadb/`):** Almacena únicamente los documentos normativos de políticas internas (`manual_apetito_riesgo.md`) usando embeddings `nomic-embed-text`.
-* **LangChain + LangGraph (`src/agent/graph.py`):** Orquestan al modelo en Ollama con herramientas tipadas (`@tool` + Pydantic), guardrail anti-alucinación de cifras y memoria persistente en `SqliteSaver` (`checkpoints.db`) con pausa *Human-in-the-Loop*.
-* **MCP:** No hace falta porque Streamlit y las herramientas corren en el mismo proceso Python en memoria.
+Asistente agéntico **100% local** para analizar cohortes (`VINTAGE` / `MOB`) y segmentos de tarjetas de crédito. Combina **DuckDB** (datos numéricos), **Ollama** (LLM local), **LangGraph** (orquestación con 5 guardrails y *Human-in-the-Loop*), **ChromaDB** (RAG normativo), **Plotly/Kaleido** (visualización), **python-pptx/docx** (reportes ejecutivos 16:9), **Git** (*Audit-as-Code*) y **Streamlit** (consola híbrida).
 
 ---
 
-## 2. Prerrequisitos (Instalar una sola vez)
+## 1. Para el Equipo (Leer Primero)
 
-1. **Git** y **drivers NVIDIA** (recomendado GPU de al menos 8 GB VRAM; funciona también en CPU más lento):
-   ```powershell
-   git --version
-   nvidia-smi
-   ```
-2. **Ollama** ([ollama.com/download](https://ollama.com/download)):
-   Descarga el modelo LLM principal y el modelo de embeddings:
+Antes de hacer cambios o pedirle código a una IA, revisa estas 4 referencias clave:
+
+* **Reglas de colaboración y dónde dejar actualizaciones/contexto (IA + Humanos):** [`docs/guias/COLABORACION_Y_CONTEXTO_IA.md`](docs/guias/COLABORACION_Y_CONTEXTO_IA.md)
+* **Buenas prácticas (PEP 8, contratos, seguridad sandbox y pruebas):** [`docs/guias/BUENAS_PRACTICAS.md`](docs/guias/BUENAS_PRACTICAS.md)
+* **Carpeta de contexto vivo (ADRs, handoffs y benchmarks):** [`docs/contexto/`](docs/contexto/README.md)
+* **Índice completo de documentación y backlog de 13 issues:** [`docs/README.md`](docs/README.md) · [`docs/planeacion/ISSUES.md`](docs/planeacion/ISSUES.md)
+
+---
+
+## 2. Cómo Ejecutar el Proyecto (Paso a Paso)
+
+### Prerrequisitos (instalar una sola vez)
+1. **Git** y **drivers NVIDIA** (`nvidia-smi` — recomendado ≥ 8 GB VRAM; también corre en CPU).
+2. **Ollama** ([ollama.com/download](https://ollama.com/download)) con los modelos locales:
    ```powershell
    ollama pull qwen3.5:9b
-   # Alternativa más ligera si tienes 8 GB VRAM y quieres más holgura:
-   # ollama pull qwen2.5:7b-instruct-q4_K_M
-
+   # Alternativa más ligera (~5 GB VRAM): ollama pull qwen2.5:7b-instruct-q4_K_M
    ollama pull nomic-embed-text
    ```
-   *(Si usas un modelo distinto a `qwen3.5:9b`, define la variable de entorno `$env:OLLAMA_MODEL="qwen2.5:7b-instruct-q4_K_M"` antes de correr la app).*
-3. **`uv` (Astral)** para gestionar Python 3.11 y dependencias:
+3. **`uv`** (gestor de Python 3.11 y dependencias):
    ```powershell
    powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
    ```
-   *(En macOS / Linux / WSL2: `curl -LsSf https://astral.sh/uv/install.sh | sh`)*
+4. **Datos fuente:** Coloca en `data/raw/` los archivos proporcionados al equipo (no versionados en Git por tamaño >100 MB):
+   * `data/raw/base_cards_sintetica.csv` *(o `base_cards_sintetica_mini.csv`)*
+   * `data/raw/Base Cards para TEC - Diccionario de Variables.xlsx`
 
----
-
-## 3. Guía de Arranque para el Equipo (Después de `git clone`)
-
-> **Importante sobre los datos:** Por tamaño (>100 MB) y privacidad, `.gitignore` excluye `data/raw/*.csv`, `data/duckdb/*.duckdb`, `data/chromadb/` y `data/state/*.db`. Pide al equipo los archivos fuente y colócalos en `data/raw/`:
-> * `data/raw/base_cards_sintetica.csv` *(o `base_cards_sintetica_mini.csv`)*
-> * `data/raw/Base Cards para TEC - Diccionario de Variables.xlsx`
-
-### Paso 1: Crear entorno virtual e instalar librerías
+### Arranque después de `git clone`
 ```powershell
+# 1. Crear entorno Python 3.11 e instalar dependencias
 uv venv --python 3.11
 uv sync
-```
 
-### Paso 2: Construir la base de datos DuckDB
-Ingesta el CSV con limpieza `TRIM()`, crea `COHORT_ID`, la tabla `cubo` y la vista `v_cubo_metricas`:
-```powershell
+# 2. Construir base de datos analítica DuckDB (tabla `cubo` + vista `v_cubo_metricas`)
 uv run python -m src.data.init_db
-```
 
-### Paso 3: Indexar políticas internas en ChromaDB (requiere Ollama abierto)
-```powershell
-uv run python -c "from src.skills.rag_tools import ingest_policies; print('Secciones indexadas:', ingest_policies())"
-```
+# 3. Indexar políticas internas en ChromaDB (requiere Ollama abierto)
+uv run python -c "from src.skills.rag_tools import ingest_policies; print('Chunks:', ingest_policies())"
 
-### Paso 4: Verificar pruebas unitarias y Smoke Test / Benchmark
-```powershell
+# 4. Verificar PEP 8 y pruebas unitarias
+uv run ruff check src app tests
 uv run pytest tests/test_db_reading.py tests/test_skills_and_guardrails.py -v
-```
-*(Con Ollama abierto, corre las 4 pruebas de efecto de tool-calling o el benchmark completo de 10 casos del Golden Dataset):*
-```powershell
+
+# 5. (Opcional) Smoke test de 4 efectos y benchmark del Golden Dataset con Ollama
 uv run python -m tests.smoke_test_agent
 uv run python -m tests.smoke_test_agent --benchmark
-```
 
-### Paso 5: Abrir la Consola Híbrida en Streamlit
-Con **Ollama** corriendo en segundo plano:
-```powershell
+# 6. Levantar la consola ejecutiva en http://localhost:8501
 uv run streamlit run app/streamlit_app.py
 ```
-Se abrirá en `http://localhost:8501` con 3 paneles:
-1. **Izquierda (Alertas del Cubo):** Segmentos maduros (`MOB >= 6`) fuera de apetito (`NCL/ENR > 15%` u `Over30/ENR > 25%`).
-2. **Centro (Evidencia y Dictamen):** KPIs desde DuckDB, 6 gráficas interactivas de Plotly, SQL ejecutado, editor de dictamen *Human-in-the-Loop*, descarga de `.docx`/`.pptx` y auditoría `git commit` / `git diff`.
-3. **Derecha (Copiloto Investigador):** Chat conectado a LangGraph para consultas ad-hoc sobre el cubo o las políticas.
 
 ---
 
-## 4. Estructura del Proyecto
+## 3. Estructura de Carpetas
 
 ```text
 BankAgent/
+├── .streamlit/                 # Tema corporativo nativo Banamex (config.toml)
 ├── app/
-│   └── streamlit_app.py                # Consola Híbrida de 3 paneles
-├── data/
-│   ├── raw/                            # CSV del cubo y Excel diccionario (no versionado)
-│   ├── duckdb/                         # Base generada cubo_banamex.duckdb (no versionado)
-│   ├── chromadb/                       # Índice vectorial local (no versionado)
-│   ├── state/                          # Checkpoints de LangGraph (no versionado)
-│   └── politicas_internas/
-│       └── manual_apetito_riesgo.md    # Reglas de negocio para RAG
-├── docs/
-│   ├── ARQUITECTURA_Y_LIBRERIAS.md     # Mapa de arquitectura, diagramas y librerías
-│   ├── MVP_CONTEXT_AGENT_BANAMEX.md    # Guía maestra de arquitectura
-│   └── TASKS.md                        # Tablero de tareas por etapas
+│   └── streamlit_app.py        # Consola ejecutiva híbrida (alertas, gráficas, dictamen, chat)
 ├── src/
-│   ├── config.py                       # Rutas, modelo Ollama y umbrales
-│   ├── data/                           # Ingesta DuckDB y cargador de diccionario
-│   ├── skills/                         # Tools: SQL, Plotly, RAG, DOCX/PPTX y Git
-│   └── agent/                          # System prompt, guardrail numérico y LangGraph
-└── tests/                              # Pruebas unitarias y smoke test de Ollama
+│   ├── config.py               # Rutas, parámetros Ollama, umbrales y valores válidos del cubo
+│   ├── data/                   # Ingesta DuckDB (init_db.py) y diccionario Excel
+│   ├── skills/                 # Herramientas tipadas: SQL, Plotly, RAG, PPTX/DOCX y Git
+│   └── agent/                  # Prompt contract (EN), guardrail numérico y grafo LangGraph
+├── data/
+│   ├── raw/                    # CSV fuente (ignorado en Git) y Excel diccionario
+│   ├── politicas_internas/     # Manuales normativos (.md/.pdf) para RAG en ChromaDB
+│   ├── duckdb/                 # Base cubo_banamex.duckdb generada localmente (ignorada)
+│   ├── chromadb/               # Índice vectorial local (ignorado)
+│   └── state/                  # Checkpoints SqliteSaver de LangGraph (ignorado)
+├── templates/                  # Plantillas base Word y PowerPoint 16:9
+├── outputs/cases/              # Expedientes auditados por caso (DOCX, PPTX, PNG, SQL, JSON)
+├── tests/                      # Pruebas unitarias, Golden Dataset (10 casos) y smoke test
+└── docs/
+    ├── README.md               # Índice maestro de documentación
+    ├── arquitectura/           # Diagramas, librerías, guardrails y contexto maestro MVP
+    ├── contexto/               # Contexto vivo, ADRs, handoffs y resultados de benchmarks
+    ├── guias/                  # Configuración, buenas prácticas y guía de colaboración/IA
+    └── planeacion/             # Backlog oficial de 13 issues (ISSUES.md) y TASKS.md
 ```
+
+---
+
+## 4. Consideraciones Críticas del Proyecto
+
+* **100% Local y Sandbox Bancario:** Cero APIs cloud externas; todo apunta a `http://localhost:11434`. El sistema está restringido al **dominio financiero/bancario**, sin `shell=True`, sin DDL/DML en DuckDB (`read_only=True`) y con escritura limitada a carpetas en lista blanca.
+* **Separación de Motores:** `DuckDB` es exclusivo para cifras tabulares; `ChromaDB` es exclusivo para texto normativo (jamás vectorizar CSVs); `SQLite` es exclusivo para estado de conversación (`thread_id`).
+* **Presupuesto de Hardware Local (8 GB VRAM / 16 GB RAM):** Se usa `num_ctx=8192`, `reasoning=False` (`think: False`) y `temperature=0.0` para evitar desbordes a RAM compartida y respuestas vacías en `qwen3.5:9b`. Todo cálculo pesado corre en DuckDB, no en Pandas.
+* **Sin MCP obligatorio en el MVP:** Las tools viven desacopladas en `src/skills/` y corren en memoria; si después se requiere exponerlas a clientes externos, pueden envolverse en FastAPI o MCP sin reescribir la lógica.
+* **No subir secretos ni CSVs pesados:** `.gitignore` bloquea `.env*`, `*.key`, `*.pem`, `data/*.csv`, `data/raw/*.csv`, `data/duckdb/*.duckdb`, `data/chromadb/` y `data/state/*.db`.
