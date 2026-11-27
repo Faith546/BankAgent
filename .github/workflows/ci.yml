@@ -30,6 +30,9 @@ jobs:
 
       - name: Run offline unit tests (no 193MB CSV required)
         run: >
-          uv run pytest tests/test_db_reading.py tests/test_skills_and_guardrails.py -v
+          uv run pytest tests/test_db_reading.py tests/test_skills_and_guardrails.py
+          tests/test_pr14_modules.py -v
           -k "dictionary_loader or validate_readonly_sql or filter_validation
-          or guardrail_verifies_numbers or langgraph_compiles"
+          or guardrail_verifies_numbers or langgraph_compiles or test_leer_
+          or test_rag_dinamico or test_dominio or test_politicas or test_analisis
+          or test_chats or test_clasificador or test_aprendizaje or test_reporte_generar"
