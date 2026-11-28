@@ -6,7 +6,7 @@ Este documento explica **qué librerías sostienen el proyecto**, **por qué se 
 
 ## 1. Mapa General de Arquitectura
 
-Todo el sistema corre en **un solo equipo local** (`localhost`), sin llamadas a APIs externas de IA. La separación clave es que **el LLM razona y decide qué herramienta pedir, pero nunca toca los datos ni hace aritmética por su cuenta**: cada dato numérico viene de **DuckDB** y cada regla de negocio viene de **ChromaDB**.
+El sistema corre en **un solo equipo local** (`localhost`) o, de forma opcional, con el modelo en un **servidor con GPU de la red universitaria** (`OLLAMA_BASE_URL`), siempre sin llamadas a APIs externas de IA. La separación clave es que **el LLM razona y decide qué herramienta pedir, pero nunca toca los datos ni hace aritmética por su cuenta**: cada dato numérico viene de **DuckDB** y cada regla de negocio viene de **ChromaDB**.
 
 ```mermaid
 flowchart TD
@@ -57,7 +57,7 @@ flowchart TD
 ### Capa 2 — LLM Local, Contratos y Orquestación
 | Librería | Qué hace | Dónde y cómo se conecta en `BankAgent` | Por qué se eligió |
 | :--- | :--- | :--- | :--- |
-| **`ollama`** / **`langchain-ollama`** | Cliente y puente hacia el servidor local de Ollama (`http://localhost:11434`). | `ChatOllama` en [`src/agent/graph.py`](../../src/agent/graph.py) invoca `qwen3.5:9b` con `temperature=0.0`, `reasoning=False` (`think: False`), `num_ctx=8192` y `.bind_tools(TOOLS)`. | 100% privado/local (cero APIs cloud), soporta *tool calling* nativo estructurado y permite apagar el modo *thinking* para evitar respuestas vacías. |
+| **`ollama`** / **`langchain-ollama`** | Cliente y puente hacia el servidor local de Ollama (`OLLAMA_BASE_URL`, por defecto `http://localhost:11434`; puede apuntar al servidor con GPU y se valida al arrancar con `validate_ollama_base_url`). | `ChatOllama` en [`src/agent/graph.py`](../../src/agent/graph.py) invoca `qwen3.5:9b` con `temperature=0.0`, `reasoning=False` (`think: False`), `num_ctx=16384` y `.bind_tools(TOOLS)`. | 100% privado/local (cero APIs cloud), soporta *tool calling* nativo estructurado y permite apagar el modo *thinking* para evitar respuestas vacías. |
 | **`langchain-core`** + **`pydantic`** | Definición de mensajes (`SystemMessage`, `HumanMessage`, `ToolMessage`), decorador `@tool` y contratos tipados (`BaseModel`). | Todas las herramientas en `src/skills/` usan `@tool(args_schema=...)` (ej. `FiltroCuboInput`, `SqlSelectInput`, `ReportInput`, `KpiCard`). | Define **contratos estrictos** entre el LLM y Python: tipos, descripciones (en inglés para ahorrar ~1.8x tokens) y validación automática. |
 | **`langgraph`** + **`langgraph-checkpoint-sqlite`** | Orquestador basado en grafo de estados (`StateGraph`) con ciclos y persistencia en SQLite (`SqliteSaver`). | [`src/agent/graph.py`](../../src/agent/graph.py) conecta los nodos `agent` $\leftrightarrow$ `tools` $\rightarrow$ `guardrail` $\rightarrow$ `human_review`, guardando cada estado en `data/state/checkpoints.db`. | Reemplaza al antiguo `initialize_agent` de LangChain: da control explícito del bucle `while`, permite autocorrección de SQL, antirrepetición y pausas **Human-in-the-Loop**. |
 
@@ -133,12 +133,15 @@ sequenceDiagram
 3. **Sin MCP por diseño (desacoplado para el futuro):**
    * Todas las herramientas viven como funciones puras en `src/skills/`. En local corren en memoria dentro del mismo proceso (menor latencia y cero servidores extra); si mañana el equipo quiere exponerlas a Claude Desktop, Cursor u otro cliente externo vía **FastAPI** o **MCP (`FastMCP`)**, solo se envuelve `src/skills/` sin tocar la lógica del negocio ni las validaciones.
 4. **Política de Sandbox y Dominio Exclusivo Financiero/Bancario:**
-   * El entorno opera como un **sandbox local restrictivo**: sin salida a internet, sin `shell=True` ni `eval/exec`, librerías acotadas a `pyproject.toml`, y escritura únicamente en rutas en lista blanca (`data/duckdb/`, `data/politicas_internas/`, `outputs/cases/`, `src/skills/generated/`).
+   * El entorno opera como un **sandbox local restrictivo**: sin salida a internet (salvo la conexión al Ollama configurado en `OLLAMA_BASE_URL`, en la red local o universitaria), sin `shell=True` ni `eval/exec`, librerías acotadas a `pyproject.toml`, y escritura únicamente en rutas en lista blanca (`data/duckdb/`, `data/politicas_internas/`, `outputs/cases/`, `src/skills/generated/`).
    * Toda interpretación (incluyendo gráficas adjuntas en chat) y generación de nuevos contratos/tools debe restringirse al **dominio financiero y bancario** tanto en el *System Prompt* como en validadores deterministas de Python.
 5. **Nota sobre Evolución de Frontend (Streamlit vs. React):**
    * Para el MVP se utiliza **Streamlit 1.67** con tematización nativa (`.streamlit/config.toml`).
    * Repositorios de diseño web moderno como [`meta/astryx`](https://github.com/meta/astryx) (React 19 + StyleX) y [`GoogleChrome/modern-web-guidance`](https://github.com/GoogleChrome/modern-web-guidance) aplican únicamente si el equipo decide migrar a una arquitectura desacoplada **React + FastAPI**.
 
+6. **Modelo local o en servidor remoto:**
+   * `OLLAMA_BASE_URL` (en `.env` o variable de entorno) decide dónde corre el modelo: `http://localhost:11434` o la dirección del servidor con GPU. Se valida al arrancar (`validate_ollama_base_url` en `src/config.py`, solo `http://host[:puerto]`) y `tests/check_ollama_connection.py` verifica conectividad, modelos instalados y VRAM.
+   * Solo el modelo vive en el servidor: DuckDB, ChromaDB y las tools siguen corriendo donde se ejecuta el código. Guía: [`guia_servidor_remoto.md`](../guias/guia_servidor_remoto.md). Resultados medidos: [`benchmark_servidor_remoto_issue13.md`](../contexto/benchmark_servidor_remoto_issue13.md).
 ---
 
 ## 5. Roadmap de Evolución del Equipo
