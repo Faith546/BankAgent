@@ -59,6 +59,7 @@ def validate_ollama_base_url(url: str) -> str:
         )
     return cleaned
 
+
 DATA_DIR: Path = PROJECT_ROOT / "data"
 DATA_RAW_DIR: Path = DATA_DIR / "raw"
 DUCKDB_DIR: Path = DATA_DIR / "duckdb"
@@ -109,7 +110,9 @@ DUCKDB_PATH: Path = DUCKDB_DIR / "cubo_banamex.duckdb"
 CHECKPOINTS_DB_PATH: Path = STATE_DIR / "checkpoints.db"
 
 # Configuración de Ollama local (cero APIs externas)
-OLLAMA_BASE_URL: str = validate_ollama_base_url(os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"))
+OLLAMA_BASE_URL: str = validate_ollama_base_url(
+    os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+)
 OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "qwen3.5:9b")
 OLLAMA_EMBED_MODEL: str = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
 # temperature=0.0 mejora reproducibilidad en tool-calling y análisis numérico
