@@ -25,7 +25,7 @@ def partir(texto):
     pedazos = []
     inicio = 0
     while inicio < len(texto):
-        pedazo = texto[inicio:inicio + tamano].strip()
+        pedazo = texto[inicio : inicio + tamano].strip()
         if pedazo:
             pedazos.append(pedazo)
         inicio += tamano - traslape
@@ -42,7 +42,9 @@ def guardar_documento(chat_id, nombre, texto):
     coleccion.add(
         ids=[f"{chat_id}_{nombre}_{i}" for i in range(len(pedazos))],
         documents=pedazos,
-        metadatas=[{"chat_id": chat_id, "nombre": nombre, "pedazo": i} for i in range(len(pedazos))],
+        metadatas=[
+            {"chat_id": chat_id, "nombre": nombre, "pedazo": i} for i in range(len(pedazos))
+        ],
     )
     return len(pedazos)
 
@@ -58,7 +60,9 @@ def buscar(chat_id, pregunta, cuantos=4):
     total = len(coleccion.get(where={"chat_id": chat_id})["ids"])
     if total == 0:
         return ""
-    res = coleccion.query(query_texts=[pregunta], n_results=min(cuantos, total), where={"chat_id": chat_id})
+    res = coleccion.query(
+        query_texts=[pregunta], n_results=min(cuantos, total), where={"chat_id": chat_id}
+    )
     partes = []
     for doc, meta in zip(res["documents"][0], res["metadatas"][0]):
         partes.append(f"Documento {meta['nombre']}, fragmento {meta['pedazo'] + 1}\n{doc}")

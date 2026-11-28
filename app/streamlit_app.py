@@ -49,20 +49,23 @@ from src.skills.git_governance import (  # noqa: E402
     get_case_diff,
     save_case_artifacts,
 )
-from src.skills.report_tools import compilar_entregables_ejecutivos  # noqa: E402
-from src.skills.reporte.generar import editar_reporte, grafica_chat  # noqa: E402
-from src.skills.reporte.generar import generar as generar_reporte  # noqa: E402
-from src.skills.interpretacion import politicas, ragDynamico  # noqa: E402
+from src.skills.interpretacion import politicas, rag_dinamico  # noqa: E402
 from src.skills.interpretacion.analisis import (  # noqa: E402
     analizar_datos_grafica,
-    leer_intencion,
     leer_documento,
+    leer_intencion,
     responder_con_documentos,
     responder_conversacion,
 )
 from src.skills.interpretacion.dominio import aviso_fuera, es_del_dominio  # noqa: E402
 from src.skills.recuerdame import aprendizaje  # noqa: E402
 from src.skills.recuerdame import chats as memoria  # noqa: E402
+from src.skills.report_tools import (  # noqa: E402
+    compilar_entregables_ejecutivos,
+    grafica_chat,
+)
+from src.skills.report_tools import editar_reporte_chat as editar_reporte  # noqa: E402
+from src.skills.report_tools import generar_reporte_chat as generar_reporte  # noqa: E402
 from src.skills.viz_tools import (  # noqa: E402
     ChartType,
     build_plotly_figure,
@@ -238,7 +241,7 @@ def _limpiar_en_fondo(candado: threading.Lock) -> None:
 
 
 def _separar_tablas(texto: str) -> tuple[str, list[str]]:
-    # sacamos las tablas en markdown de la respuesta del agente para mostrarlas en la pestaña de resultados
+    # Extraemos tablas en markdown de la respuesta para la pestaña de resultados
     resto: list[str] = []
     tablas: list[str] = []
     actual: list[str] = []
@@ -272,9 +275,11 @@ def _comprimir_en_fondo(chat_id: str) -> None:
 
 
 def _decodificar(valores):
-    # plotly guarda los numeros en binario dentro del json (dtype y bdata), aqui los regresamos a lista
+    # Plotly guarda numeros en binario dentro del JSON (dtype/bdata); los pasamos a lista
     if isinstance(valores, dict) and "bdata" in valores:
-        arreglo = np.frombuffer(base64.b64decode(valores["bdata"]), dtype=np.dtype(valores["dtype"]))
+        arreglo = np.frombuffer(
+            base64.b64decode(valores["bdata"]), dtype=np.dtype(valores["dtype"])
+        )
         if "shape" in valores:
             arreglo = arreglo.reshape([int(n) for n in str(valores["shape"]).split(",")])
         return arreglo.tolist()
@@ -291,7 +296,7 @@ def _resumir_figura(fig) -> str:
             lista = [lista[int(i * paso)] for i in range(40)]
         limpios = []
         for v in lista:
-            # los numeros de numpy se pasan a numeros normales para que no salgan como np.float64(...)
+            # Convertimos numeros de numpy a Python nativo para evitar np.float64(...)
             if isinstance(v, numbers.Real) and not isinstance(v, bool):
                 v = float(v)
                 v = int(v) if v.is_integer() else round(v, 2)
@@ -307,7 +312,10 @@ def _resumir_figura(fig) -> str:
         z = _decodificar(getattr(traza, "z", None))
         if z is not None:
             filas = [limpiar(f) for f in z]
-            lineas.append(f"Serie {nombre} (mapa de calor)  columnas {limpiar(x)}  filas {limpiar(y)}  valores {filas}")
+            lineas.append(
+                f"Serie {nombre} (mapa de calor)  columnas {limpiar(x)}  "
+                f"filas {limpiar(y)}  valores {filas}"
+            )
         else:
             lineas.append(f"Serie {nombre}  x {limpiar(x)}  y {limpiar(y)}")
             lineas.extend(_hechos_serie(nombre, x, y))
@@ -315,9 +323,13 @@ def _resumir_figura(fig) -> str:
 
 
 def _hechos_serie(nombre, xs, ys) -> list[str]:
-    # calculamos aqui maximo, minimo y cruces con el limite para que el modelo no tenga que compararlos
+    # Calculamos maximo, minimo y cruces con limite para que el modelo no los estime
     try:
-        puntos = [(x, float(y)) for x, y in zip(list(xs), list(ys)) if y is not None and not isinstance(y, str)]
+        puntos = [
+            (x, float(y))
+            for x, y in zip(list(xs), list(ys))
+            if y is not None and not isinstance(y, str)
+        ]
     except (TypeError, ValueError):
         return []
     if len(puntos) < 2:
@@ -331,30 +343,36 @@ def _hechos_serie(nombre, xs, ys) -> list[str]:
     x_min, y_min = min(puntos, key=lambda p: p[1])
     x_ult, y_ult = puntos[-1]
     hechos = [
-        f"Hechos de {nombre}  máximo {bonito(y_max)} en {bonito(x_max)}, mínimo {bonito(y_min)} en {bonito(x_min)}, "
+        f"Hechos de {nombre}  máximo {bonito(y_max)} en {bonito(x_max)}, "
+        f"mínimo {bonito(y_min)} en {bonito(x_min)}, "
         f"último valor {bonito(y_ult)} en {bonito(x_ult)}"
     ]
     n = str(nombre).lower()
-    limite = MAX_OVER30_RATE_PCT if "over30" in n or "morosidad" in n else (
-        MAX_NCL_RATE_PCT if "ncl" in n or "pérdida" in n or "perdida" in n else None
+    limite = (
+        MAX_OVER30_RATE_PCT
+        if "over30" in n or "morosidad" in n
+        else (MAX_NCL_RATE_PCT if "ncl" in n or "pérdida" in n or "perdida" in n else None)
     )
     if limite is not None:
         arriba = [x for x, y in puntos if y > limite]
         if arriba:
             hechos.append(
-                f"Límite de {nombre} {bonito(limite)}%  la serie está ARRIBA del límite desde {bonito(arriba[0])}, "
-                f"en {len(arriba)} de {len(puntos)} puntos, y su máximo queda {bonito(round(y_max - limite, 2))} puntos arriba del límite"
+                f"Límite de {nombre} {bonito(limite)}%  la serie está ARRIBA del límite "
+                f"desde {bonito(arriba[0])}, "
+                f"en {len(arriba)} de {len(puntos)} puntos, y su máximo queda "
+                f"{bonito(round(y_max - limite, 2))} puntos arriba del límite"
             )
         else:
             hechos.append(
-                f"Límite de {nombre} {bonito(limite)}%  la serie nunca pasa el límite, su máximo queda "
+                f"Límite de {nombre} {bonito(limite)}%  la serie nunca pasa el límite, "
+                "su máximo queda "
                 f"{bonito(round(limite - y_max, 2))} puntos debajo"
             )
     return hechos
 
 
 def _grafica_en_pantalla(chat) -> dict[str, Any] | None:
-    # en resultados es la ultima grafica que pidio en este chat, en las demas pestañas la de graficas financieras
+    # En Resultados es la ultima grafica pedida; en las demas pestañas la de graficas financieras
     if st.session_state.get("pestana_activa") != PESTANA_RESULTADOS:
         return st.session_state.get("grafica_actual")
     graficas = [r for r in chat.get("resultados", []) if r["tipo"] == "grafica"]
@@ -373,12 +391,14 @@ def _send_copilot_message(user_q: str, case_id: str, archivo=None, datos_grafica
     # limpiamos y aprendemos en segundo plano con la primera pregunta y luego cada 6
     st.session_state["preguntas_sesion"] = st.session_state.get("preguntas_sesion", 0) + 1
     if st.session_state["preguntas_sesion"] % 6 == 1:
-        threading.Thread(target=_limpiar_en_fondo, args=(_candado_limpieza(),), daemon=True).start()
+        threading.Thread(
+            target=_limpiar_en_fondo, args=(_candado_limpieza(),), daemon=True
+        ).start()
 
     chat = st.session_state["chat_activo"]
     anteriores = [m[1] for m in chat["mensajes"] if m[0] == "user"]
 
-    # el modelo que escogio el usuario nos dice a donde va la pregunta y que opina de la respuesta anterior
+    # El modelo seleccionado clasifica el destino y la opinion sobre la respuesta anterior
     modelo = OLLAMA_MODELOS[st.session_state.get("modelo_elegido") or "Normal"]
     respuestas = [m[1] for m in chat["mensajes"] if m[0] == "assistant"]
     intencion = leer_intencion(user_q, respuestas[-1] if respuestas else "", modelo)
@@ -398,9 +418,12 @@ def _send_copilot_message(user_q: str, case_id: str, archivo=None, datos_grafica
         tipo = "agente"
     # la politica escoge el estilo de respuesta en las preguntas al agente, el historial va fijo
     accion = aprendizaje.elegir_accion(tipo) if tipo == "agente" else None
-    # si el usuario pidio un estilo con sus palabras le hacemos caso en esta respuesta, tambien en documentos y graficas,
+    # Si el usuario pidio un estilo explicito lo aplicamos tambien en documentos y graficas
     # y esa respuesta no cuenta para aprender porque no la escogio la politica
-    forzado = tipo in ("agente", "documento", "grafica_panel") and intencion.opinion in aprendizaje.pedido_a_estilo
+    forzado = (
+        tipo in ("agente", "documento", "grafica_panel")
+        and intencion.opinion in aprendizaje.pedido_a_estilo
+    )
     if forzado:
         accion = aprendizaje.pedido_a_estilo[intencion.opinion]
     # si no hay estilo, documentos y graficas usan su formato de siempre
@@ -423,9 +446,9 @@ def _send_copilot_message(user_q: str, case_id: str, archivo=None, datos_grafica
             if not es_del_dominio(texto):
                 answer = aviso_fuera
             else:
-                ragDynamico.guardar_documento(chat["id"], archivo.name, texto)
+                rag_dinamico.guardar_documento(chat["id"], archivo.name, texto)
                 chat["documento"] = {"nombre": archivo.name}
-                fragmentos = ragDynamico.buscar(chat["id"], user_q)
+                fragmentos = rag_dinamico.buscar(chat["id"], user_q)
                 answer = responder_con_documentos(user_q, fragmentos, historial, modelo, estilo)
         except Exception as exc:  # noqa: BLE001
             answer = f"No se pudo leer el documento. {exc}"
@@ -434,7 +457,12 @@ def _send_copilot_message(user_q: str, case_id: str, archivo=None, datos_grafica
         # la grafica de graficas financieras se analiza con sus datos, sin vision
         try:
             answer = analizar_datos_grafica(
-                datos_grafica["titulo"], datos_grafica["datos"], datos_grafica["segmento"], historial, modelo, estilo
+                datos_grafica["titulo"],
+                datos_grafica["datos"],
+                datos_grafica["segmento"],
+                historial,
+                modelo,
+                estilo,
             )
         except Exception as exc:  # noqa: BLE001
             answer = f"No se pudo analizar la gráfica. {exc}"
@@ -453,22 +481,33 @@ def _send_copilot_message(user_q: str, case_id: str, archivo=None, datos_grafica
         try:
             ruta = generar_reporte(pregunta)
             if not ruta or not Path(str(ruta)).exists():
-                hechos = sorted((PROJECT_ROOT / "outputs" / "reportes").glob("*.docx"), key=lambda x: x.stat().st_mtime)
+                hechos = sorted(
+                    (PROJECT_ROOT / "outputs" / "reportes").glob("*.docx"),
+                    key=lambda x: x.stat().st_mtime,
+                )
                 ruta = hechos[-1] if hechos else ""
             ruta_html = Path(str(ruta)).with_suffix(".html") if ruta else None
             _agregar_resultado(
                 chat,
-                {"tipo": "reporte", "titulo": pregunta, "docx": str(ruta), "html": str(ruta_html or "")},
+                {
+                    "tipo": "reporte",
+                    "titulo": pregunta,
+                    "docx": str(ruta),
+                    "html": str(ruta_html or ""),
+                },
                 "Tu reporte está listo en la pestaña Resultados",
             )
-            answer = f"Listo, el reporte de {pregunta} está en la pestaña Resultados para revisarlo y descargarlo."
+            answer = (
+                f"Listo, el reporte de {pregunta} está en la pestaña Resultados "
+                "para revisarlo y descargarlo."
+            )
             # el boton de descarga ya no va en el chat sino en resultados
             ruta = ""
         except Exception as exc:  # noqa: BLE001
             answer = f"No se pudo generar el reporte. {exc}"
 
     elif tipo == "grafica":
-        # armamos la grafica con lo mismo que usa el reporte y la mandamos a la pestaña de resultados
+        # Armamos la grafica con la misma logica del reporte y la enviamos a Resultados
         try:
             res_grafica = grafica_chat(user_q)
             _agregar_resultado(
@@ -482,16 +521,18 @@ def _send_copilot_message(user_q: str, case_id: str, archivo=None, datos_grafica
                 },
                 "Tu gráfica está lista en la pestaña Resultados",
             )
-            answer = (res_grafica["texto"] or "Listo.") + "\n\nLa gráfica y la tabla están en la pestaña Resultados."
+            answer = (
+                res_grafica["texto"] or "Listo."
+            ) + "\n\nLa gráfica y la tabla están en la pestaña Resultados."
         except Exception as exc:  # noqa: BLE001
             answer = f"No se pudo generar la gráfica. {exc}"
 
     else:
-        # al agente le pasamos la conversacion y los pedazos de documentos del chat para que no pierda el hilo
+        # Pasamos la conversacion y fragmentos de documentos del chat para mantener el hilo
         fragmentos = ""
         if chat.get("documento"):
             try:
-                fragmentos = ragDynamico.buscar(chat["id"], user_q)
+                fragmentos = rag_dinamico.buscar(chat["id"], user_q)
             except Exception as exc:  # noqa: BLE001
                 print("no se pudo buscar en el rag", exc)
         # le pegamos a la pregunta el estilo que escogio la politica
@@ -499,8 +540,9 @@ def _send_copilot_message(user_q: str, case_id: str, archivo=None, datos_grafica
         if historial or fragmentos:
             # el historial solo sirve para entender referencias, no para limitar la pregunta nueva
             prompt_agente = (
-                "Conversación previa, úsala solo para entender referencias como esas cifras o y Branch. "
-                "Si la pregunta actual se entiende sola, respóndela completa sin limitarte a lo que se habló antes.\n"
+                "Conversación previa, úsala solo para referencias como esas cifras o y Branch. "
+                "Si la pregunta actual se entiende sola, respóndela completa "
+                "sin limitarte a lo anterior.\n"
                 f"{historial}\n\n"
             )
             if fragmentos:
@@ -512,7 +554,9 @@ def _send_copilot_message(user_q: str, case_id: str, archivo=None, datos_grafica
             # si se usa el mismo hilo langgraph acumula todos los mensajes y se llena el contexto
             res = chat_graph.invoke(
                 make_initial_state(prompt=prompt_agente, case_id=case_id, modelo=modelo),
-                config={"configurable": {"thread_id": f"copilot-{chat['id']}-{len(chat['mensajes'])}"}},
+                config={
+                    "configurable": {"thread_id": f"copilot-{chat['id']}-{len(chat['mensajes'])}"}
+                },
             )
             st.session_state["token_usage"] = res.get("token_usage", {})
             # guardamos las consultas del chat para verlas en la pestaña de auditoria
@@ -520,8 +564,11 @@ def _send_copilot_message(user_q: str, case_id: str, archivo=None, datos_grafica
             answer = res.get("draft_dictamen", "")
             # si el agente termino sin escribir nada lo decimos en lugar de dejar el mensaje vacio
             if not answer.strip():
-                answer = "El agente no alcanzó a escribir la respuesta, intenta preguntarlo de otra forma."
-            # si el agente respondio con tablas las pasamos a resultados y en el chat queda la explicacion
+                answer = (
+                    "El agente no alcanzó a escribir la respuesta, "
+                    "intenta preguntarlo de otra forma."
+                )
+            # Si respondio con tablas las pasamos a Resultados y en chat queda la explicacion
             answer, tablas = _separar_tablas(answer)
             if tablas:
                 _agregar_resultado(
@@ -548,7 +595,9 @@ def _send_copilot_message(user_q: str, case_id: str, archivo=None, datos_grafica
         mensaje += [str(ruta), figuras]
     chat["mensajes"].append(mensaje)
     memoria.guardar_chat(chat)
-    aprendizaje.registrar_evento(chat["id"], user_q, tipo, answer, None if forzado else accion, intencion.opinion)
+    aprendizaje.registrar_evento(
+        chat["id"], user_q, tipo, answer, None if forzado else accion, intencion.opinion
+    )
     # si la conversacion ya crecio se comprime en segundo plano
     threading.Thread(target=_comprimir_en_fondo, args=(chat["id"],), daemon=True).start()
 
@@ -592,7 +641,7 @@ def _render_chats() -> None:
             memoria.borrar_chat(chat["id"])
             aprendizaje.borrar_eventos_chat(chat["id"])
             try:
-                ragDynamico.borrar_documentos_chat(chat["id"])
+                rag_dinamico.borrar_documentos_chat(chat["id"])
             except Exception as exc:  # noqa: BLE001
                 print("no se pudo borrar del rag", exc)
             restantes = memoria.listar_chats()
@@ -656,10 +705,17 @@ def _render_sidebar() -> dict[str, Any] | None:
             probabilidades = tabla_estilos.get("probabilidades", {})
             if set(probabilidades) != set(aprendizaje.acciones):
                 probabilidades = aprendizaje.softmax({a: 0.0 for a in aprendizaje.acciones})
-            nombres_estilos = {"corta": "Respuesta corta", "detallada": "Respuesta detallada", "con_tabla": "Con tabla"}
+            nombres_estilos = {
+                "corta": "Respuesta corta",
+                "detallada": "Respuesta detallada",
+                "con_tabla": "Con tabla",
+            }
             for estilo, probabilidad in probabilidades.items():
                 st.progress(probabilidad, text=f"{nombres_estilos[estilo]} {probabilidad:.0%}")
-            st.caption(f"Aprendido de {tabla_estilos.get('n', 0)} respuestas, se actualiza cada 6 preguntas.")
+            st.caption(
+                f"Aprendido de {tabla_estilos.get('n', 0)} respuestas "
+                "(se actualiza cada 6 preguntas)."
+            )
 
         st.divider()
         think_tag = "ON" if OLLAMA_REASONING else "OFF"
@@ -776,12 +832,12 @@ def main() -> None:
     col_main, col_chat = st.columns([1.75, 1.0], gap="medium")
 
     with col_main:
-        # con la llave sabemos que pestaña tiene abierta el usuario, asi la grafica a mi lado es la que esta viendo
+        # La llave indica que pestaña esta abierta para contextualizar la grafica visible
         tab_viz, tab_dictamen, tab_audit, tab_resultados, tab_politicas = st.tabs(
             PESTANAS, key="pestana_activa", on_change="rerun"
         )
 
-        # aviso de que el agente dejo algo nuevo en resultados, streamlit no deja cambiar de pestaña solo
+        # Aviso de nuevo contenido en Resultados (Streamlit no cambia de pestaña solo)
         aviso_resultados = st.session_state.pop("aviso_resultados", None)
         if aviso_resultados:
             st.toast(aviso_resultados, icon=":material/inventory_2:")
@@ -808,11 +864,14 @@ def main() -> None:
 
                 fig = build_plotly_figure(tipo_grafica=chart_type, filtros=filtros)
                 st.plotly_chart(fig, use_container_width=True)
-                # guardamos la grafica que se esta viendo para cuando el usuario pregunte por ella en el chat
+                # Guardamos la grafica actual para cuando el usuario pregunte por ella en chat
                 st.session_state["grafica_actual"] = {
                     "titulo": CHART_LABELS[chart_type],
                     "datos": _resumir_figura(fig),
-                    "segmento": f"canal {case['channel']}, edad {case['age_tag']}, score {case['score_tag']}",
+                    "segmento": (
+                        f"canal {case['channel']}, edad {case['age_tag']}, "
+                        f"score {case['score_tag']}"
+                    ),
                 }
 
                 # el copiloto analiza la grafica con sus datos, no con una captura
@@ -827,7 +886,9 @@ def main() -> None:
                             case["case_id"],
                             datos_grafica=st.session_state["grafica_actual"],
                         )
-                    st.session_state["aviso_resultados"] = "El análisis de la gráfica está en el chat del Copiloto"
+                    st.session_state["aviso_resultados"] = (
+                        "El análisis de la gráfica está en el chat del Copiloto"
+                    )
                     st.rerun()
 
             with st.expander(
@@ -1062,8 +1123,11 @@ def main() -> None:
 
                 last_out = st.session_state.get("last_outputs", {})
                 if last_out.get("ruta_docx") and Path(last_out["ruta_docx"]).exists():
-                    d1, d2 = st.columns(2)
-                    with d1:
+                    has_pdf = (
+                        bool(last_out.get("ruta_pdf")) and Path(last_out["ruta_pdf"]).exists()
+                    )
+                    cols_dl = st.columns(3 if has_pdf else 2)
+                    with cols_dl[0]:
                         st.download_button(
                             "Descargar Memorándum (.docx)",
                             data=Path(last_out["ruta_docx"]).read_bytes(),
@@ -1071,7 +1135,7 @@ def main() -> None:
                             icon=":material/download:",
                             use_container_width=True,
                         )
-                    with d2:
+                    with cols_dl[1]:
                         st.download_button(
                             "Descargar Presentación (.pptx)",
                             data=Path(last_out["ruta_pptx"]).read_bytes(),
@@ -1079,6 +1143,15 @@ def main() -> None:
                             icon=":material/download:",
                             use_container_width=True,
                         )
+                    if has_pdf:
+                        with cols_dl[2]:
+                            st.download_button(
+                                "Descargar PDF (.pdf)",
+                                data=Path(last_out["ruta_pdf"]).read_bytes(),
+                                file_name=Path(last_out["ruta_pdf"]).name,
+                                icon=":material/picture_as_pdf:",
+                                use_container_width=True,
+                            )
 
         with tab_audit:
             with st.container(border=True):
@@ -1106,18 +1179,23 @@ def main() -> None:
                     st.caption("Aún no se han ejecutado consultas Text-to-SQL en este caso.")
 
         with tab_resultados:
-            # aqui se ven las graficas, tablas y reportes del chat que esta abierto, lo mas nuevo arriba
+            # Muestra graficas, tablas y reportes del chat abierto (lo mas nuevo arriba)
             chat_res = st.session_state["chat_activo"]
             resultados = chat_res.get("resultados", [])
             if not resultados:
                 st.info(
-                    "Aquí aparecerán las gráficas, tablas y reportes que le pidas al Copiloto en este chat.",
+                    "Aquí aparecerán las gráficas, tablas y reportes "
+                    "que le pidas al Copiloto en este chat.",
                     icon=":material/inventory_2:",
                 )
             for k in range(len(resultados) - 1, -1, -1):
                 r = resultados[k]
                 with st.container(border=True):
-                    icono = {"grafica": "bar_chart", "reporte": "description", "tabla": "table_chart"}.get(r["tipo"], "inventory_2")
+                    icono = {
+                        "grafica": "bar_chart",
+                        "reporte": "description",
+                        "tabla": "table_chart",
+                    }.get(r["tipo"], "inventory_2")
                     st.markdown(f"#### :material/{icono}: {r['titulo']}")
                     st.caption(r.get("fecha", ""))
 
@@ -1125,10 +1203,16 @@ def main() -> None:
                         for j, figura_json in enumerate(r["figuras"]):
                             fig_res = pio.from_json(figura_json)
                             fig_res.update_layout(width=None, height=420)
-                            st.plotly_chart(fig_res, use_container_width=True, key=f"res_graf_{chat_res['id']}_{k}_{j}")
+                            st.plotly_chart(
+                                fig_res,
+                                use_container_width=True,
+                                key=f"res_graf_{chat_res['id']}_{k}_{j}",
+                            )
                         if r.get("tabla"):
                             st.dataframe(
-                                pd.DataFrame(r["tabla"]["filas"], columns=r["tabla"]["encabezado"]),
+                                pd.DataFrame(
+                                    r["tabla"]["filas"], columns=r["tabla"]["encabezado"]
+                                ),
                                 hide_index=True,
                                 use_container_width=True,
                             )
@@ -1145,14 +1229,20 @@ def main() -> None:
                         ruta_pdf = ruta_docx.with_suffix(".pdf")
                         llave = f"editor_{chat_res['id']}_{k}"
                         # vista previa editable, se da clic en el texto, se escribe y se guarda
-                        if ruta_html and ruta_html.exists() and ruta_docx.with_suffix(".json").exists():
+                        if (
+                            ruta_html
+                            and ruta_html.exists()
+                            and ruta_docx.with_suffix(".json").exists()
+                        ):
                             guardado = _editor_reporte(
                                 html=ruta_html.read_text(encoding="utf-8"),
                                 guardado=st.session_state.get(f"guardado_{llave}", False),
                                 key=llave,
                                 default=None,
                             )
-                            if guardado and guardado.get("nonce") != st.session_state.get(f"nonce_{llave}"):
+                            if guardado and guardado.get("nonce") != st.session_state.get(
+                                f"nonce_{llave}"
+                            ):
                                 st.session_state[f"nonce_{llave}"] = guardado["nonce"]
                                 try:
                                     avisos = editar_reporte(ruta_docx, guardado["cambios"])
@@ -1162,19 +1252,26 @@ def main() -> None:
                                     st.session_state[f"avisos_{llave}"] = []
                                     st.error(f"No se pudieron guardar los cambios. {exc}")
                                 st.rerun()
-                            # si el usuario escribio cifras que no salen del cubo se le avisa, pero se respeta
+                            # Si hay cifras fuera del cubo se avisa, pero se respeta la edicion
                             if st.session_state.get(f"avisos_{llave}"):
                                 st.warning(
-                                    "Estas cifras no salen del cubo, revísalas antes de mandar el reporte: "
+                                    "Estas cifras no salen del cubo, "
+                                    "revísalas antes de mandar el reporte: "
                                     + ", ".join(st.session_state[f"avisos_{llave}"]),
                                     icon=":material/warning:",
                                 )
                         elif ruta_html and ruta_html.exists():
                             # reportes viejos sin piezas guardadas solo se pueden ver
-                            components.html(ruta_html.read_text(encoding="utf-8"), height=750, scrolling=True)
+                            components.html(
+                                ruta_html.read_text(encoding="utf-8"), height=750, scrolling=True
+                            )
                         else:
-                            st.caption("No hay vista previa para este reporte, pero puedes descargar el Word.")
-                        d1, d2 = st.columns(2)
+                            st.caption(
+                                "No hay vista previa para este reporte, "
+                                "pero puedes descargar el Word."
+                            )
+                        ruta_pptx = ruta_docx.with_suffix(".pptx")
+                        d1, d2, d3 = st.columns(3)
                         with d1:
                             if ruta_docx.exists():
                                 # si lo descarga es recompensa para el agente
@@ -1200,9 +1297,21 @@ def main() -> None:
                                     on_click=aprendizaje.dar_recompensa,
                                     args=(chat_res["id"], 1),
                                 )
+                        with d3:
+                            if ruta_pptx.exists():
+                                st.download_button(
+                                    "Descargar PPTX (16:9)",
+                                    data=ruta_pptx.read_bytes(),
+                                    file_name=ruta_pptx.name,
+                                    icon=":material/slideshow:",
+                                    use_container_width=True,
+                                    key=f"res_pptx_{chat_res['id']}_{k}",
+                                    on_click=aprendizaje.dar_recompensa,
+                                    args=(chat_res["id"], 1),
+                                )
 
         with tab_politicas:
-            # subimos los manuales que consulta el agente, igual que resultados pero en vez de descargar se sube
+            # Subida de manuales que consulta el agente en ChromaDB
             with st.container(border=True):
                 st.markdown("#### :material/upload_file: Subir o actualizar una política")
                 st.caption(
@@ -1210,21 +1319,30 @@ def main() -> None:
                     "El agente usa la versión nueva desde la siguiente pregunta."
                 )
                 with st.form("form_politica", clear_on_submit=True):
-                    nuevo_manual = st.file_uploader("Manual de política", type=["md", "pdf", "docx"])
+                    nuevo_manual = st.file_uploader(
+                        "Manual de política", type=["md", "pdf", "docx"]
+                    )
                     if st.form_submit_button("Subir política", icon=":material/upload:"):
                         if nuevo_manual is None:
                             st.warning("Primero escoge un archivo.")
                         else:
                             with st.spinner("Leyendo el manual y guardándolo en ChromaDB..."):
                                 try:
-                                    total = politicas.guardar_politica(nuevo_manual.name, nuevo_manual.getvalue())
-                                    st.success(f"{nuevo_manual.name} quedó cargado con {total} secciones.")
+                                    total = politicas.guardar_politica(
+                                        nuevo_manual.name, nuevo_manual.getvalue()
+                                    )
+                                    st.success(
+                                        f"{nuevo_manual.name} quedó cargado con {total} secciones."
+                                    )
                                 except Exception as exc:  # noqa: BLE001
                                     st.error(f"No se pudo cargar la política. {exc}")
 
             manuales = politicas.listar_politicas()
             if not manuales:
-                st.info("Aquí aparecerán las políticas que consulta el agente.", icon=":material/policy:")
+                st.info(
+                    "Aquí aparecerán las políticas que consulta el agente.",
+                    icon=":material/policy:",
+                )
             for manual in manuales:
                 # cada politica va en su tarjeta como en resultados
                 with st.container(border=True):
@@ -1237,13 +1355,18 @@ def main() -> None:
                     st.caption(f"{manual['fecha']} · {estado}")
                     with st.expander("Ver contenido", icon=":material/visibility:"):
                         try:
-                            st.markdown(politicas.contenido_politica(manual["nombre"]) or "Sin contenido guardado.")
+                            st.markdown(
+                                politicas.contenido_politica(manual["nombre"])
+                                or "Sin contenido guardado."
+                            )
                         except Exception as exc:  # noqa: BLE001
                             st.caption(f"No se pudo leer el contenido. {exc}")
                     # el borrado pide confirmacion para no quitar una politica por accidente
                     with st.popover("Borrar", icon=":material/delete:"):
                         st.write(f"¿Seguro que quieres borrar {manual['nombre']}?")
-                        if st.button("Sí, borrar", key=f"borrar_politica_{manual['nombre']}", type="primary"):
+                        if st.button(
+                            "Sí, borrar", key=f"borrar_politica_{manual['nombre']}", type="primary"
+                        ):
                             politicas.borrar_politica(manual["nombre"])
                             st.rerun()
 
@@ -1260,7 +1383,12 @@ def main() -> None:
                 with st.popover("Historial", icon=":material/history:", use_container_width=True):
                     _render_chats()
             with ch_r:
-                if st.button("Nuevo", icon=":material/add_comment:", use_container_width=True, key="nuevo_chat_panel"):
+                if st.button(
+                    "Nuevo",
+                    icon=":material/add_comment:",
+                    use_container_width=True,
+                    key="nuevo_chat_panel",
+                ):
                     # si el chat actual sigue vacio no creamos otro
                     if st.session_state["chat_activo"]["mensajes"]:
                         st.session_state["chat_activo"] = memoria.crear_chat()
@@ -1286,8 +1414,6 @@ def main() -> None:
                 key="quick_prompt_pills",
             )
 
-           
-
             chat_box = st.container(height=420, border=False)
             with chat_box:
                 if not st.session_state["chat_history"]:
@@ -1312,13 +1438,17 @@ def main() -> None:
                                 on_click=aprendizaje.dar_recompensa,
                                 args=(chat_id, 1),
                             )
-                        # las graficas se guardaron como json y aqui se vuelven a dibujar interactivas
+                        # Las graficas guardadas en JSON se reconstruyen interactivas
                         if len(item) > 3 and item[3]:
                             for k, figura_json in enumerate(item[3]):
                                 fig_chat = pio.from_json(figura_json)
                                 fig_chat.update_layout(width=None, height=360)
-                                st.plotly_chart(fig_chat, use_container_width=True, key=f"grafica_{chat_id}_{i}_{k}")
-                        # los pulgares solo van en la ultima respuesta porque la recompensa va al ultimo evento
+                                st.plotly_chart(
+                                    fig_chat,
+                                    use_container_width=True,
+                                    key=f"grafica_{chat_id}_{i}_{k}",
+                                )
+                        # Los pulgares solo van en la ultima respuesta (recompensa al evento)
                         if item[0] == "assistant" and i == len(historial_chat) - 1:
                             st.feedback(
                                 "thumbs",

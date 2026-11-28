@@ -66,7 +66,9 @@ class AgentState(TypedDict):
     modelo: str
 
 
-def make_initial_state(prompt: str, case_id: str = "CASO-2026-0001", modelo: str = OLLAMA_MODEL) -> AgentState:
+def make_initial_state(
+    prompt: str, case_id: str = "CASO-2026-0001", modelo: str = OLLAMA_MODEL
+) -> AgentState:
     """Construye el estado inicial limpio para invocar el grafo."""
     return {
         "messages": [HumanMessage(content=prompt)],
@@ -149,7 +151,7 @@ def _route_after_agent(state: AgentState) -> str:
     sin_texto = isinstance(last_msg, AIMessage) and not str(last_msg.content).strip()
     # Guardrail 2: Tope explícito de vueltas para evitar bucles infinitos
     if state.get("turn_count", 0) >= AGENT_MAX_TURNS:
-        # si se acabaron las vueltas a medio camino le damos una ultima vuelta para cerrar la respuesta
+        # si se acabaron las vueltas a medio camino le damos una ultima vuelta para cerrar
         return "final" if pide_tools or sin_texto else "guardrail"
     if pide_tools:
         return "tools"
@@ -160,7 +162,7 @@ def _route_after_agent(state: AgentState) -> str:
 
 
 def _final_node(state: AgentState) -> dict[str, Any]:
-    """Ultima vuelta sin herramientas para que el agente cierre la respuesta con lo que ya tiene."""
+    """Ultima vuelta sin herramientas para cerrar la respuesta con los datos ya obtenidos."""
     mensajes = list(state["messages"])
     # quitamos las llamadas a herramientas que ya no se van a ejecutar
     if isinstance(mensajes[-1], AIMessage) and getattr(mensajes[-1], "tool_calls", None):
@@ -168,7 +170,7 @@ def _final_node(state: AgentState) -> dict[str, Any]:
     cierre = HumanMessage(
         content=(
             "FINAL: You cannot call more tools. Write the complete final answer in Spanish now, "
-            "using only the verified figures already returned by the tools. Do not stop mid-sentence."
+            "using only verified figures already returned by tools. Do not stop mid-sentence."
         )
     )
     llm = _get_llm(state.get("modelo", OLLAMA_MODEL))

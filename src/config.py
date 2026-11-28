@@ -8,27 +8,28 @@ from urllib.parse import urlparse
 
 # Rutas principales del proyecto
 PROJECT_ROOT: Path = Path(__file__).resolve().parent.parent
-def _load_dotenv_file(path: Path) -> int:
-    """Carga pares CLAVE=VALOR de un `.env` simple sin pisar variables ya definidas en el entorno."""
-    if not path.is_file():
+
+
+def load_dotenv(env_path: Path | None = None) -> int:
+    """Carga variables de un archivo `.env` sin sobrescribir las ya definidas en el entorno."""
+    target = env_path or (PROJECT_ROOT / ".env")
+    if not target.exists():
         return 0
     loaded = 0
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
+    for raw_line in target.read_text(encoding="utf-8").splitlines():
         line = raw_line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
-        key, _, value = line.partition("=")
-        key = key.removeprefix("export ").strip()
-        value = value.strip()
-        if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
-            value = value[1:-1]
-        if key and key not in os.environ:
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key and value != "" and key not in os.environ:
             os.environ[key] = value
             loaded += 1
     return loaded
 
-# Las variables reales del entorno siempre ganan sobre el `.env`
-_load_dotenv_file(PROJECT_ROOT / ".env")
+
+load_dotenv()
 
 
 def validate_ollama_base_url(url: str) -> str:
@@ -216,3 +217,15 @@ OLLAMA_MODELOS: dict[str, str] = {
 
 # caracteres del historial del chat que le mandamos al modelo en cada pregunta
 HISTORIAL_CHARS: int = 4000
+
+# Paleta corporativa oficial Banamex (SSOT para UI, gráficas y reportes)
+BANAMEX_PALETTE: dict[str, str | tuple[str, ...]] = {
+    "navy": "#003B71",
+    "dark_navy": "#002447",
+    "crimson": "#C8102E",
+    "teal": "#0F766E",
+    "amber": "#D97706",
+    "slate": "#0F172A",
+    "muted": "#475569",
+    "chart_colors": ("#003B71", "#C8102E", "#0F766E", "#D97706", "#475569", "#2563EB"),
+}

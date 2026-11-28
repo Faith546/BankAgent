@@ -7,10 +7,12 @@ plan de acción numerado).
 
 from __future__ import annotations
 
+import base64
+import html
 import json
 from datetime import date
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from docx import Document as DocxDocument
 from docx.oxml import OxmlElement, parse_xml
@@ -882,6 +884,85 @@ def _build_pptx(out_pptx: Path, data: ReportInput) -> None:
     prs.save(str(out_pptx))
 
 
+def build_pptx_deck(out_pptx: Path, data: ReportInput) -> Path:
+    """Renderizador público de presentaciones 16:9 a partir del contrato ReportInput."""
+    _build_pptx(out_pptx, data)
+    return out_pptx
+
+
+def _build_html_and_pdf(out_html: Path, out_pdf: Path, data: ReportInput) -> str | None:
+    """Genera vista previa HTML y PDF corporativo Banamex a partir del mismo contrato."""
+    esc = html.escape
+    badge_hex = (
+        "#C8102E"
+        if data.estado_riesgo == "FUERA DE APETITO"
+        else ("#D97706" if data.estado_riesgo == "VIGILANCIA" else "#0F766E")
+    )
+    rows_to_table = data.tabla_metricas or [[k.label, k.value, k.delta] for k in data.kpis]
+    table_html = ""
+    if rows_to_table:
+        trs = "".join(
+            "<tr>" + "".join(f"<td>{esc(str(c))}</td>" for c in row[:3]) + "</tr>"
+            for row in rows_to_table
+        )
+        table_html = (
+            "<h2>1. Resumen Cuantitativo Verificado (DuckDB)</h2>"
+            "<table><thead><tr><th>Métrica</th><th>Valor Verificado</th>"
+            f"<th>Referencia</th></tr></thead><tbody>{trs}</tbody></table>"
+        )
+
+    bullets = "".join(f"<li>{esc(h)}</li>" for h in data.hallazgos)
+    dictamen_html = "".join(
+        f"<p>{esc(p.strip())}</p>" for p in data.dictamen.splitlines() if p.strip()
+    )
+    imgs_html = ""
+    for p_str in data.rutas_graficas:
+        img_p = Path(p_str)
+        if img_p.exists():
+            b64 = base64.b64encode(img_p.read_bytes()).decode("ascii")
+            imgs_html += (
+                f'<div class="chart"><img src="data:image/png;base64,{b64}" width="520"></div>'
+            )
+
+    doc_html = (
+        '<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">'
+        f"<title>{esc(data.titulo)}</title><style>"
+        "body{font-family:Helvetica,Arial,sans-serif;color:#0F172A;margin:28px;font-size:12px;}"
+        "h1{color:#003B71;font-size:18px;margin-bottom:4px;}"
+        "h2{color:#003B71;font-size:14px;border-bottom:1px solid #CBD5E1;padding-bottom:3px;}"
+        f".badge{{display:inline-block;background:{badge_hex};color:#fff;padding:3px 8px;"
+        "font-weight:bold;font-size:10px;margin-bottom:10px;}"
+        "table{width:100%;border-collapse:collapse;margin:10px 0;font-size:11px;}"
+        "th{background:#003B71;color:#fff;text-align:left;padding:5px;}"
+        "td{border-bottom:1px solid #CBD5E1;padding:5px;}"
+        ".chart{text-align:center;margin:12px 0;}"
+        ".footer{color:#475569;font-size:9px;margin-top:20px;border-top:1px solid #CBD5E1;"
+        "padding-top:6px;}"
+        "</style></head><body>"
+        f'<div class="badge">{esc(data.estado_riesgo)}</div>'
+        f"<h1>[{esc(data.case_id)}] {esc(data.titulo)}</h1>"
+        f"<p><strong>{esc(data.subtitulo)}</strong> · Fecha: {date.today().isoformat()}</p>"
+        f"{table_html}"
+        f"<h2>2. Hallazgos Clave</h2><ul>{bullets}</ul>"
+        f"<h2>3. Dictamen y Recomendación</h2>{dictamen_html}"
+        f"{imgs_html}"
+        '<div class="footer">BANAMEX · Comité de Riesgo de Portafolio · '
+        f"{esc(data.case_id)} · Audit-as-Code</div></body></html>"
+    )
+    out_html.write_text(doc_html, encoding="utf-8")
+
+    try:
+        from xhtml2pdf import pisa
+
+        with open(out_pdf, "wb") as fh:
+            res = pisa.CreatePDF(doc_html, dest=fh, encoding="utf-8")
+        if res.err:
+            return None
+        return str(out_pdf)
+    except Exception:  # noqa: BLE001
+        return None
+
+
 @tool(args_schema=ReportInput)
 def compilar_entregables_ejecutivos(
     case_id: str,
@@ -896,7 +977,7 @@ def compilar_entregables_ejecutivos(
     politica_contrastada: str = "",
     acciones: list[str] | None = None,
 ) -> str:
-    """Compile styled executive Memorandum (.docx) and 5-slide 16:9 Committee Deck (.pptx)."""
+    """Compile executive Memorandum (.docx), 5-slide 16:9 Deck (.pptx), and PDF (.pdf)."""
     memo_tpl, _ = ensure_templates_exist()
     case_dir = CASES_DIR / case_id
     case_dir.mkdir(parents=True, exist_ok=True)
@@ -917,18 +998,44 @@ def compilar_entregables_ejecutivos(
 
     out_docx = case_dir / f"{case_id}_memorandum.docx"
     out_pptx = case_dir / f"{case_id}_comite.pptx"
+    out_html = case_dir / f"{case_id}_memorandum.html"
+    out_pdf = case_dir / f"{case_id}_memorandum.pdf"
 
     _build_docx(memo_tpl, out_docx, payload)
     _build_pptx(out_pptx, payload)
+    pdf_path = _build_html_and_pdf(out_html, out_pdf, payload)
 
     return json.dumps(
         {
             "case_id": case_id,
             "ruta_docx": str(out_docx),
             "ruta_pptx": str(out_pptx),
+            "ruta_pdf": pdf_path,
+            "ruta_html": str(out_html),
             "slides_generadas": 5,
             "formato": "16:9 Widescreen",
             "graficas_incluidas": [p for p in payload.rutas_graficas if Path(p).exists()],
         },
         ensure_ascii=False,
     )
+
+
+def generar_reporte_chat(pregunta: str) -> Path:
+    """Fachada unificada para generar reportes conversacionales (.docx/.pptx/.html/.pdf)."""
+    from src.skills.reporte.generar import generar
+
+    return generar(pregunta)
+
+
+def editar_reporte_chat(ruta_docx: str | Path, cambios: dict[str, Any]) -> list[str]:
+    """Fachada unificada para aplicar ediciones desde la vista previa HTML y recompilar."""
+    from src.skills.reporte.generar import editar_reporte
+
+    return editar_reporte(ruta_docx, cambios)
+
+
+def grafica_chat(pregunta: str) -> dict[str, Any]:
+    """Fachada unificada para generar gráficas ad-hoc solicitadas desde el chat."""
+    from src.skills.reporte.generar import grafica_chat as _grafica_chat
+
+    return _grafica_chat(pregunta)

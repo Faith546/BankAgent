@@ -36,6 +36,7 @@ Tanto desarrolladores humanos como **agentes de IA** deben colocar cada tipo de 
 
 | Tipo de cambio / actualización | Carpeta / Archivo exacto | Qué actualizar |
 | :--- | :--- | :--- |
+| **Cambios visibles en la interfaz o flujos de usuario** | [`docs/guias/MANUAL_USUARIO.md`](MANUAL_USUARIO.md) | Actualizar pasos, pestañas, botones o ejemplos para el analista final. |
 | **Configuración de entorno, setup o guías operativas** | [`docs/guias/`](.) | Actualizar `guia_arranque_local.md` o agregar nueva guía en `docs/guias/`. |
 | **Contexto vivo, decisiones técnicas (ADR) y bitácoras de cambio** | [`docs/contexto/`](../contexto/README.md) | Dejar notas de handoff, decisiones de diseño y contexto relevante para futuras sesiones de IA. |
 | **Cambios en arquitectura, librerías o diagramas** | [`docs/arquitectura/ARQUITECTURA_Y_LIBRERIAS.md`](../arquitectura/ARQUITECTURA_Y_LIBRERIAS.md) | Actualizar diagramas Mermaid, tabla de librerías y reglas de sandbox. |

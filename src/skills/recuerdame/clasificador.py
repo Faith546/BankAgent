@@ -7,19 +7,65 @@ import joblib
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
 
-from src.config import MEMORIA_UTIL_DIR, VALID_AGE_TAGS, VALID_CHANNELS, VALID_PRODUCTS, VALID_SCORE_TAGS, VALID_STRATEGIES
+from src.config import (
+    MEMORIA_UTIL_DIR,
+    VALID_AGE_TAGS,
+    VALID_CHANNELS,
+    VALID_PRODUCTS,
+    VALID_SCORE_TAGS,
+    VALID_STRATEGIES,
+)
 
 ruta_modelo = Path(__file__).resolve().parent / "modelo_clasificador.joblib"
 umbral = 2
 minimo_entrenar = 20
 modelo = None
 
-meses = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto",
-         "septiembre", "octubre", "noviembre", "diciembre"]
-palabras_clave = ["perdida", "morosidad", "over30", "ncl", "roa", "utilidad", "ingresos", "saldo",
-                  "recuperacion", "cobranza", "cosecha", "vintage", "mob", "canal", "producto",
-                  "score", "segmento", "limite", "apetito", "politica", "reporte", "grafica",
-                  "compara", "ranking", "riesgo", "cartera", "portafolio", "dictamen", "documento"]
+meses = [
+    "enero",
+    "febrero",
+    "marzo",
+    "abril",
+    "mayo",
+    "junio",
+    "julio",
+    "agosto",
+    "septiembre",
+    "octubre",
+    "noviembre",
+    "diciembre",
+]
+palabras_clave = [
+    "perdida",
+    "morosidad",
+    "over30",
+    "ncl",
+    "roa",
+    "utilidad",
+    "ingresos",
+    "saldo",
+    "recuperacion",
+    "cobranza",
+    "cosecha",
+    "vintage",
+    "mob",
+    "canal",
+    "producto",
+    "score",
+    "segmento",
+    "limite",
+    "apetito",
+    "politica",
+    "reporte",
+    "grafica",
+    "compara",
+    "ranking",
+    "riesgo",
+    "cartera",
+    "portafolio",
+    "dictamen",
+    "documento",
+]
 errores = ["no se pudo", "error al conectar", "sin respuesta del agente"]
 
 
@@ -30,6 +76,7 @@ def normalizar(texto):
 
 
 # paso 1 reglas para quitar lo que esta roto
+
 
 def limpiar_eventos(eventos):
     limpios = []
@@ -49,12 +96,15 @@ def limpiar_eventos(eventos):
 
 # paso 2 puntaje de relevancia con el catalogo del cubo
 
+
 def puntaje_relevancia(texto, tipo):
     if tipo in ["reporte", "documento"]:
         return umbral
     t = normalizar(texto)
     puntos = 0
-    catalogo = VALID_CHANNELS + VALID_PRODUCTS + VALID_SCORE_TAGS + VALID_AGE_TAGS + VALID_STRATEGIES
+    catalogo = (
+        VALID_CHANNELS + VALID_PRODUCTS + VALID_SCORE_TAGS + VALID_AGE_TAGS + VALID_STRATEGIES
+    )
     puntos += sum(1 for v in catalogo if normalizar(v) in t)
     puntos += sum(1 for m in meses if m in t)
     puntos += len(re.findall(r"\b20\d{4}\b", t))
@@ -65,7 +115,9 @@ def puntaje_relevancia(texto, tipo):
 def entidades(texto):
     # sacamos los temas del cubo que menciona el mensaje para saber si sigue el mismo tema
     t = normalizar(texto)
-    catalogo = VALID_CHANNELS + VALID_PRODUCTS + VALID_SCORE_TAGS + VALID_AGE_TAGS + VALID_STRATEGIES
+    catalogo = (
+        VALID_CHANNELS + VALID_PRODUCTS + VALID_SCORE_TAGS + VALID_AGE_TAGS + VALID_STRATEGIES
+    )
     temas = {normalizar(v) for v in catalogo if normalizar(v) in t}
     temas |= {m for m in meses if m in t}
     temas |= set(re.findall(r"\b20\d{4}\b", t))
@@ -73,6 +125,7 @@ def entidades(texto):
 
 
 # paso 3 naive bayes con tf-idf
+
 
 def etiqueta(e):
     # si el usuario hizo algo con la respuesta el mensaje fue util aunque tenga pocos puntos
@@ -119,6 +172,7 @@ def es_util(texto, tipo):
 
 
 # paso 4 juntamos todo, lo que sale de aqui es lo que aprende el epsilon greedy
+
 
 def filtrar(eventos):
     return [e for e in limpiar_eventos(eventos) if es_util(e["texto"], e["tipo"])]
