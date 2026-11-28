@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from urllib.parse import urlparse
 
 # Rutas principales del proyecto
 PROJECT_ROOT: Path = Path(__file__).resolve().parent.parent
@@ -29,6 +30,35 @@ def load_dotenv(env_path: Path | None = None) -> int:
 
 
 load_dotenv()
+
+
+def validate_ollama_base_url(url: str) -> str:
+    """Valida y normaliza `OLLAMA_BASE_URL` (solo `http://host[:puerto]`, sin TLS ni rutas)."""
+    cleaned = (url or "").strip().rstrip("/")
+    if cleaned.lower().startswith("https://"):
+        raise ValueError(
+            f"OLLAMA_BASE_URL={url!r} usa https://, pero Ollama sirve HTTP sin TLS. "
+            f"Usa 'http://{cleaned[8:]}'."
+        )
+    if not cleaned.lower().startswith("http://"):
+        raise ValueError(
+            f"OLLAMA_BASE_URL={url!r} debe empezar con 'http://' "
+            "(ejemplo: http://192.168.1.50:11434 o http://localhost:11434)."
+        )
+    parsed = urlparse(cleaned)
+    if not parsed.hostname:
+        raise ValueError(f"OLLAMA_BASE_URL={url!r} no incluye host.")
+    try:
+        _ = parsed.port
+    except ValueError as exc:
+        raise ValueError(f"OLLAMA_BASE_URL={url!r} tiene un puerto inválido.") from exc
+    if parsed.path or parsed.query or parsed.fragment:
+        raise ValueError(
+            f"OLLAMA_BASE_URL={url!r} no debe incluir ruta ni parámetros; "
+            "usa solo http://host:puerto."
+        )
+    return cleaned
+
 
 DATA_DIR: Path = PROJECT_ROOT / "data"
 DATA_RAW_DIR: Path = DATA_DIR / "raw"
@@ -80,7 +110,9 @@ DUCKDB_PATH: Path = DUCKDB_DIR / "cubo_banamex.duckdb"
 CHECKPOINTS_DB_PATH: Path = STATE_DIR / "checkpoints.db"
 
 # Configuración de Ollama local (cero APIs externas)
-OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_BASE_URL: str = validate_ollama_base_url(
+    os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+)
 OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "qwen3.5:9b")
 OLLAMA_EMBED_MODEL: str = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
 # temperature=0.0 mejora reproducibilidad en tool-calling y análisis numérico
